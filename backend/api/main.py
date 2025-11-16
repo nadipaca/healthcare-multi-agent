@@ -106,47 +106,63 @@ async def health():
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest):
     """
-    Single-turn chat endpoint for Module 1 (symptom check + triage).
+    Single-turn chat endpoint.
 
-    - Creates/uses a session_id (so you can maintain state across turns).
-    - Sends user text to the ADK Runner as Content/Part.
-    - Streams all events and collects the final text response.
+    - Creates/uses a session_id.
+    - Sends user text to the ADK Runner.
+    - Streams events and assembles text responses.
+    - Detects 'NEEDS_HUMAN_REVIEW: true' marker for HITL.
     """
-    try:
-        session_id = payload.session_id or str(uuid.uuid4())
+    session_id = payload.session_id or str(uuid.uuid4())
 
-        # Ensure there is a session for this conversation
-        await ensure_session(session_id)
+    # Ensure session exists
+    await ensure_session(session_id)
 
-        runner = get_runner()
+    runner = get_runner()
 
-        # Wrap plain user text into ADK Content/Part
-        user_message: Content = Content(
-            role="user",
-            parts=[Part(text=payload.message)],
-        )
+    # Wrap user text
+    user_message: Content = Content(
+        role="user",
+        parts=[Part(text=payload.message)],
+    )
 
-        # Collect all text segments from the event stream
-        messages: List[str] = []
+    messages: List[str] = []
+    needs_human_review = False
+    agent_trace: List[str] = []
 
-        # ADK's async streaming API
-        async for event in runner.run_async(
-            user_id=USER_ID,
-            session_id=session_id,
-            new_message=user_message,
-        ):
-            # Event is google.adk.events.Event
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        messages.append(part.text)
+    async for event in runner.run_async(
+        user_id=USER_ID,
+        session_id=session_id,
+        new_message=user_message,
+    ):
+        # Collect text from events
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    text = part.text
+                    messages.append(text)
 
-        # Optionally, you can join or just return the list
-        # Here: we return all segments to keep frontend flexible
-        return ChatResponse(session_id=session_id, messages=messages)
-    
-    except Exception as e:
-        import traceback
-        print(f"Error in chat endpoint: {e}")
-        print(traceback.format_exc())
-        raise
+                    # If the agent used the special flag, mark for human review
+                    if "NEEDS_HUMAN_REVIEW: true" in text:
+                        needs_human_review = True
+
+        # If event has agent_name (depending on ADK version), capture it.
+        # We'll guard with getattr to avoid crashes if the attr doesn't exist.
+        agent_name = getattr(event, "agent_name", None)
+        if agent_name:
+            agent_trace.append(agent_name)
+
+    # Deduplicate agent_trace while preserving order
+    seen = set()
+    dedup_trace: List[str] = []
+    for name in agent_trace:
+        if name not in seen:
+            seen.add(name)
+            dedup_trace.append(name)
+
+    return ChatResponse(
+        session_id=session_id,
+        messages=messages,
+        needs_human_review=needs_human_review,
+        agent_trace=dedup_trace,
+    )
