@@ -1,30 +1,53 @@
-# backend/adk_app/orchestrator_agent.py
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event
 
-from .symptom_agent import symptom_agent
+from adk_app.symptom_agent import symptom_agent
+from adk_app.appointment_agent import appointment_agent
 
 
 class OrchestratorAgent(BaseAgent):
     """
-    For Module 1, this is just a thin wrapper:
-    ALWAYS delegates to symptom_checker.
-    Later modules will add real routing + other agents.
+    Module 2 Orchestrator:
+    - Routes between Symptom Checker and Appointment Scheduler.
+    - Stores light context in session.state for handoff.
     """
     name: str = "orchestrator"
-    description: str = "Routes queries to the symptom checker (Module 1)."
+    description: str = (
+        "Routes queries to symptom checker or appointment scheduler, "
+        "and maintains light session context."
+    )
 
     async def _run_async_impl(
         self,
         ctx: InvocationContext,
     ) -> AsyncGenerator[Event, None]:
-        # Simply pass the context through to the symptom agent
-        async for ev in symptom_agent.run_async(ctx):
-            yield ev
+        user_msg = ctx.latest_user_message or ""
+        msg_lower = user_msg.lower()
+
+        # basic state access
+        state = ctx.session.state
+        state["last_user_message"] = user_msg
+
+        # --- Routing logic ---
+        if any(word in msg_lower for word in ["appointment", "schedule", "book a visit", "book an appointment"]):
+            state["last_intent"] = "appointment"
+
+            # Optionally, carry last symptom summary into state["reason_for_visit"]
+            # For now, we simply reuse the last user message as the reason.
+            if "reason_for_visit" not in state:
+                state["reason_for_visit"] = user_msg
+
+            async for ev in appointment_agent.run_async(ctx):
+                yield ev
+
+        else:
+            state["last_intent"] = "symptom_check"
+            async for ev in symptom_agent.run_async(ctx):
+                yield ev
 
 
-# Export a single root agent instance for the app to use
+# Single root agent that FastAPI's Runner will use
 root_agent = OrchestratorAgent()
