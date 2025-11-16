@@ -26,7 +26,15 @@ class OrchestratorAgent(BaseAgent):
         self,
         ctx: InvocationContext,
     ) -> AsyncGenerator[Event, None]:
-        user_msg = ctx.latest_user_message or ""
+        # Get the user message from the context
+        user_msg = ""
+        if hasattr(ctx, 'user_content') and ctx.user_content:
+            if hasattr(ctx.user_content, 'parts') and ctx.user_content.parts:
+                for part in ctx.user_content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        user_msg = part.text
+                        break
+        
         msg_lower = user_msg.lower()
         state = ctx.session.state
 
