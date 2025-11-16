@@ -1,6 +1,7 @@
 # backend/api/main.py
 import os
 import uuid
+import time
 from typing import List, Optional
 from dotenv import load_dotenv
 
@@ -12,7 +13,7 @@ if not os.getenv("GOOGLE_API_KEY"):
     print("ERROR: GOOGLE_API_KEY not set in environment!")
     print("Please set it in your .env file or as an environment variable")
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from google.genai.types import Content, Part
@@ -23,18 +24,28 @@ from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactServ
 from google.adk.events import Event  # ADK event type
 
 from api.models import ChatRequest, ChatResponse
-from adk_app.orchestrator_agent import root_agent 
+from adk_app.orchestrator_agent import root_agent
+from api.rate_limiter import rate_limiter
+from api.analytics import analytics 
 
 APP_NAME = "healthcare-multi-agent"
 USER_ID = "demo_user"
 
 app = FastAPI(title="Healthcare Symptom Checker (Module 1)")
 
+# CORS configuration - more explicit for debugging
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # OK for local dev; tighten later for prod
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+        "*"  # Allow all for development
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -103,17 +114,31 @@ async def health():
     return {"status": "ok", "service": "healthcare-multi-agent"}
 
 
+@app.options("/api/chat")
+async def chat_options():
+    """Handle CORS preflight requests for the chat endpoint"""
+    return {}
+
+
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest):
+async def chat(request: Request, payload: ChatRequest):
     """
-    Single-turn chat endpoint.
+    Single-turn chat endpoint with rate limiting and analytics.
 
     - Creates/uses a session_id.
+    - Applies rate limiting per session
+    - Tracks analytics metrics
     - Sends user text to the ADK Runner.
     - Streams events and assembles text responses.
     - Detects 'NEEDS_HUMAN_REVIEW: true' marker for HITL.
     """
     session_id = payload.session_id or str(uuid.uuid4())
+    
+    # Apply rate limiting
+    await rate_limiter.check_rate_limit(session_id)
+    
+    # Start timing for analytics
+    start_time = time.time()
 
     # Ensure session exists
     await ensure_session(session_id)
@@ -159,6 +184,22 @@ async def chat(payload: ChatRequest):
         if name not in seen:
             seen.add(name)
             dedup_trace.append(name)
+    
+    # Calculate duration
+    duration_ms = (time.time() - start_time) * 1000
+    
+    # Record analytics
+    primary_agent = dedup_trace[0] if dedup_trace else "unknown"
+    total_response_length = sum(len(msg) for msg in messages)
+    
+    analytics.record_interaction(
+        session_id=session_id,
+        agent_name=primary_agent,
+        user_message=payload.message,
+        response_length=total_response_length,
+        duration_ms=duration_ms,
+        hitl_flagged=needs_human_review,
+    )
 
     return ChatResponse(
         session_id=session_id,
@@ -166,3 +207,81 @@ async def chat(payload: ChatRequest):
         needs_human_review=needs_human_review,
         agent_trace=dedup_trace,
     )
+
+
+# ========== Analytics & Monitoring Endpoints ==========
+
+@app.get("/api/analytics/dashboard")
+async def get_dashboard_metrics(hours: int = 24):
+    """
+    Get comprehensive dashboard metrics.
+    
+    Args:
+        hours: Number of hours to look back (default 24)
+        
+    Returns:
+        Dashboard metrics including agent usage, performance, and HITL flags
+    """
+    return analytics.get_dashboard_metrics(hours=hours)
+
+
+@app.get("/api/analytics/session/{session_id}")
+async def get_session_analytics(session_id: str):
+    """
+    Get detailed analytics for a specific session.
+    
+    Args:
+        session_id: The session ID to retrieve
+        
+    Returns:
+        Detailed session metrics or 404 if not found
+    """
+    from fastapi import HTTPException
+    
+    session_data = analytics.get_session_details(session_id)
+    if session_data is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return session_data
+
+
+@app.get("/api/analytics/rate-limits/{session_id}")
+async def get_rate_limits(session_id: str):
+    """
+    Get remaining rate limits for a session.
+    
+    Args:
+        session_id: The session ID to check
+        
+    Returns:
+        Remaining requests per minute and per hour
+    """
+    return await rate_limiter.get_remaining_requests(session_id)
+
+
+@app.post("/api/feedback/rating")
+async def submit_rating(session_id: str, agent_name: str, rating: int):
+    """
+    Submit a user rating for an agent interaction.
+    
+    Args:
+        session_id: Session ID
+        agent_name: Name of the agent being rated
+        rating: Rating from 1-5
+        
+    Returns:
+        Confirmation message
+    """
+    from fastapi import HTTPException
+    
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+    
+    analytics.record_rating(session_id, agent_name, rating)
+    
+    return {
+        "status": "success",
+        "message": "Rating recorded",
+        "session_id": session_id,
+        "rating": rating
+    }
