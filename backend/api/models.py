@@ -7,6 +7,13 @@ class ChatRequest(BaseModel):
     message: str
 
 
+from pydantic import BaseModel
+from typing import List
+
+
 class ChatResponse(BaseModel):
     session_id: str
     messages: List[str]
+    needs_human_review: bool = False
+    agent_trace: List[str] = []
+
