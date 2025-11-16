@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+from datetime import datetime
 
 from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
@@ -15,6 +16,7 @@ class OrchestratorAgent(BaseAgent):
     Module 4 Orchestrator:
     - Routes between Symptom Checker, Appointment Scheduler, Insurance Verifier, and Feedback Collector.
     - Stores light context in session.state for handoff between agents.
+    - Enhanced orchestrator with better context management
     """
     name: str = "orchestrator"
     description: str = (
@@ -40,6 +42,52 @@ class OrchestratorAgent(BaseAgent):
 
         # Keep track of last raw message
         state["last_user_message"] = user_msg
+
+         # Store conversation context
+        state.setdefault("conversation_history", []).append({
+            "message": user_msg,
+            "timestamp": datetime.now().isoformat(),
+        })
+        
+        # Detect EMERGENCY keywords first (highest priority)
+        emergency_keywords = [
+            "chest pain", "can't breathe", "stroke", "suicide",
+            "severe bleeding", "unconscious", "911"
+        ]
+        if any(kw in msg_lower for kw in emergency_keywords):
+            state["last_intent"] = "emergency"
+            state["severity"] = "critical"
+            async for ev in emergency_agent.run_async(ctx):
+                yield ev
+            return
+        
+        # Medical records access
+        if any(kw in msg_lower for kw in ["medical records", "my history", "past visits"]):
+            state["last_intent"] = "medical_records"
+            async for ev in medical_records_agent.run_async(ctx):
+                yield ev
+            return
+        
+        # Prescription management
+        if any(kw in msg_lower for kw in ["prescription", "refill", "medication"]):
+            state["last_intent"] = "prescription"
+            async for ev in prescription_agent.run_async(ctx):
+                yield ev
+            return
+        
+        # Lab results
+        if any(kw in msg_lower for kw in ["lab results", "test results", "blood work"]):
+            state["last_intent"] = "lab_results"
+            async for ev in lab_results_agent.run_async(ctx):
+                yield ev
+            return
+        
+        # Wellness/goals
+        if any(kw in msg_lower for kw in ["health goal", "lose weight", "exercise plan"]):
+            state["last_intent"] = "wellness"
+            async for ev in wellness_agent.run_async(ctx):
+                yield ev
+            return
 
         # --- Feedback intent ---
         # Triggered when user explicitly says they want to give feedback / rate the system.
