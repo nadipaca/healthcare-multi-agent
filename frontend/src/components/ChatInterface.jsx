@@ -16,15 +16,59 @@ const ChatInterface = () => {
 
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
+  const [proactiveActions, setProactiveActions] = useState([]);
+  const [currentFlow, setCurrentFlow] = useState(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ENHANCED: Handle response and set proactive actions
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        const content = lastMessage.content.toLowerCase();
+        
+        // Detect flow state and suggest next actions
+        if (content.includes("immediate relief options") || content.includes("recommended next step")) {
+          setProactiveActions([
+            "✅ Got it, let's schedule the appointment",
+            "ℹ️ Tell me more about treatment options", 
+            "📞 I need to call someone first",
+            "⏰ Check my calendar availability"
+          ]);
+          setCurrentFlow("post-symptom");
+        } else if (content.includes("booked") && content.includes("appointment")) {
+          setProactiveActions([
+            "💳 Yes, check my insurance coverage",
+            "📋 What should I prepare for the visit?",
+            "📅 Add this to my calendar",
+            "🔔 Set up appointment reminders"
+          ]);
+          setCurrentFlow("post-appointment");
+        } else if (content.includes("insurance coverage") || content.includes("coverage verified")) {
+          setProactiveActions([
+            "✅ Perfect, I'm all set!",
+            "❓ What if I need to reschedule?",
+            "💊 Will my prescriptions be covered too?",
+            "👨‍⚕️ Tell me about my doctor"
+          ]);
+          setCurrentFlow("post-insurance");
+        } else {
+          setProactiveActions([]);
+        }
+      }
+    }
+  }, [messages]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
+    
+    // Clear proactive actions when user sends a message
+    setProactiveActions([]);
     
     await sendMessage(inputValue);
     setInputValue('');
@@ -77,7 +121,32 @@ const ChatInterface = () => {
         </div>
       )}
 
-      {/* Messages Area */}
+      {/* ENHANCED: Proactive Actions */}
+      {proactiveActions.length > 0 && (
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-100 p-4">
+          <div className="max-w-4xl mx-auto">
+            <p className="text-sm font-medium text-green-700 mb-2">
+              🤖 I can help you with next steps:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {proactiveActions.map((action, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setInputValue(action.replace(/[✅ℹ️📞⏰💳📋📅🔔❓💊👨‍⚕️] /, ''));
+                    setProactiveActions([]);
+                  }}
+                  className="bg-white hover:bg-green-50 text-left text-green-800 px-4 py-3 rounded-lg border border-green-200 hover:border-green-300 transition-all text-sm font-medium shadow-sm hover:shadow-md"
+                >
+                  {action}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Messages Area - keeping existing code */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-4xl mx-auto">
           {/* Welcome Message */}
@@ -104,7 +173,7 @@ const ChatInterface = () => {
             </div>
           )}
 
-          {/* Messages */}
+          {/* Messages - keeping existing message rendering code */}
           {messages.map((msg, idx) => {
             const isUser = msg.role === 'user';
             const isSystem = msg.role === 'system';
@@ -170,7 +239,7 @@ const ChatInterface = () => {
         </div>
       </div>
 
-      {/* Input Area */}
+      {/* Input Area - keeping existing code */}
       <div className="border-t bg-white p-4 shadow-lg">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="flex gap-2">

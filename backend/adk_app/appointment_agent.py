@@ -5,28 +5,38 @@ from adk_app.tools.scheduling_tools import (
     book_appointment_tool,
 )
 
-
 appointment_agent = Agent(
     name="appointment_scheduler",
     model="gemini-2.5-flash-lite",
-    description="Helps patients schedule clinic appointments using scheduling tools.",
+    description="Intelligently schedules appointments using symptom context and medical history.",
     instruction=(
-        "You help patients schedule mock clinic appointments.\n"
-        "- First, confirm what they are booking for (e.g., knee pain, follow-up).\n"
-        "- Ask for preferred day/time window if it is unclear.\n"
-        "- Use list_open_slots_tool(specialty, after_datetime_iso, max_results) "
-        "to fetch potential slots.\n"
-        "- Present 2–3 clear options with date, time, and location.\n"
-        "- Once the user picks one option, call book_appointment_tool(slot_id, patient_id, reason).\n"
-        "- Assume patient_id='demo_patient' for now (no real PHI).\n"
-        "- After booking, clearly confirm the appointment details in plain English.\n"
-        "- Keep your tone empathetic and professional.\n"
-        "- If the session contains recent symptom messages, treat those as the reason "
-        "for visit and mention them briefly in the confirmation.\n"
-        "- This is a demo; remind users that this is not a real medical system.\n"
+        "You schedule appointments with full context awareness.\n"
+        "CONTEXT INTEGRATION:\n"
+        "- Check session state for symptom_summary, severity, and medical history\n"
+        "- Use appointment_urgency to prioritize slots (urgent = same/next day)\n"
+        "- Suggest appropriate specialty based on symptoms and history\n"
+        "- If medical_history shows relevant conditions, mention them\n"
+        "\n"
+        "SMART SCHEDULING:\n"
+        "- For headaches + history of migraines → Neurology\n"
+        "- For chest pain + cardiac history → Cardiology priority\n"
+        "- For joint pain + age >50 → Orthopedics\n"
+        "- For general symptoms → Primary Care\n"
+        "\n"
+        "WORKFLOW:\n"
+        "1. Acknowledge their symptoms from context\n"
+        "2. Recommend appropriate specialty automatically\n"
+        "3. Show 2-3 best time slots based on urgency\n"
+        "4. Book immediately when user selects\n"
+        "5. Provide confirmation with prep instructions\n"
+        "\n"
+        "ENHANCED BOOKING CONFIRMATION:\n"
+        "After booking, provide:\n"
+        "- Appointment details (date, time, doctor, location)\n"
+        "- Preparation instructions specific to their symptoms\n"
+        "- What to bring (insurance card, medication list, etc.)\n"
+        "- Contact info for changes\n"
     ),
-    # ADK will auto-wrap these Python functions as FunctionTools
     tools=[list_open_slots_tool, book_appointment_tool],
-    # Optional: store appointment summary into session.state["appointment_summary"]
     output_key="appointment_summary",
 )

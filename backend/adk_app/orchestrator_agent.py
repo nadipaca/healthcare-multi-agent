@@ -1,159 +1,69 @@
-from typing import AsyncGenerator
-from datetime import datetime
+from google.adk.agents import Agent
 
-from google.adk.agents import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
-from google.adk.events import Event
-
-from adk_app.symptom_agent import symptom_agent
-from adk_app.appointment_agent import appointment_agent
-from adk_app.insurance_agent import insurance_agent
-from adk_app.feedback_agent import feedback_agent
-
-
-class OrchestratorAgent(BaseAgent):
-    """
-    Module 4 Orchestrator:
-    - Routes between Symptom Checker, Appointment Scheduler, Insurance Verifier, and Feedback Collector.
-    - Stores light context in session.state for handoff between agents.
-    - Enhanced orchestrator with better context management
-    """
-    name: str = "orchestrator"
-    description: str = (
-        "Routes queries to symptom checker, appointment scheduler, insurance verifier, "
-        "or feedback collector, and maintains light session context."
-    )
-
-    async def _run_async_impl(
-        self,
-        ctx: InvocationContext,
-    ) -> AsyncGenerator[Event, None]:
-        # Get the user message from the context
-        user_msg = ""
-        if hasattr(ctx, 'user_content') and ctx.user_content:
-            if hasattr(ctx.user_content, 'parts') and ctx.user_content.parts:
-                for part in ctx.user_content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        user_msg = part.text
-                        break
-        
-        msg_lower = user_msg.lower()
-        state = ctx.session.state
-
-        # Keep track of last raw message
-        state["last_user_message"] = user_msg
-
-         # Store conversation context
-        state.setdefault("conversation_history", []).append({
-            "message": user_msg,
-            "timestamp": datetime.now().isoformat(),
-        })
-        
-        # Detect EMERGENCY keywords first (highest priority)
-        emergency_keywords = [
-            "chest pain", "can't breathe", "stroke", "suicide",
-            "severe bleeding", "unconscious", "911"
-        ]
-        if any(kw in msg_lower for kw in emergency_keywords):
-            state["last_intent"] = "emergency"
-            state["severity"] = "critical"
-            async for ev in emergency_agent.run_async(ctx):
-                yield ev
-            return
-        
-        # Medical records access
-        if any(kw in msg_lower for kw in ["medical records", "my history", "past visits"]):
-            state["last_intent"] = "medical_records"
-            async for ev in medical_records_agent.run_async(ctx):
-                yield ev
-            return
-        
-        # Prescription management
-        if any(kw in msg_lower for kw in ["prescription", "refill", "medication"]):
-            state["last_intent"] = "prescription"
-            async for ev in prescription_agent.run_async(ctx):
-                yield ev
-            return
-        
-        # Lab results
-        if any(kw in msg_lower for kw in ["lab results", "test results", "blood work"]):
-            state["last_intent"] = "lab_results"
-            async for ev in lab_results_agent.run_async(ctx):
-                yield ev
-            return
-        
-        # Wellness/goals
-        if any(kw in msg_lower for kw in ["health goal", "lose weight", "exercise plan"]):
-            state["last_intent"] = "wellness"
-            async for ev in wellness_agent.run_async(ctx):
-                yield ev
-            return
-
-        # --- Feedback intent ---
-        # Triggered when user explicitly says they want to give feedback / rate the system.
-        if any(
-            kw in msg_lower
-            for kw in [
-                "feedback",
-                "rate this",
-                "rate your help",
-                "review this assistant",
-                "complaint",
-            ]
-        ):
-            state["last_intent"] = "feedback"
-            async for ev in feedback_agent.run_async(ctx):
-                yield ev
-            return
-
-        # --- Insurance intent: coverage / claims / benefits ---
-        if any(
-            kw in msg_lower
-            for kw in [
-                "insurance",
-                "covered",
-                "coverage",
-                "claim",
-                "copay",
-                "co-pay",
-                "deductible",
-                "out of pocket",
-            ]
-        ):
-            state["last_intent"] = "insurance"
-
-            reason = state.get("reason_for_visit") or state.get("last_user_message")
-            state["insurance_reason"] = reason
-
-            async for ev in insurance_agent.run_async(ctx):
-                yield ev
-            return
-
-        # --- Appointment intent: schedule / book / reschedule ---
-        if any(
-            kw in msg_lower
-            for kw in [
-                "appointment",
-                "schedule",
-                "book a visit",
-                "book an appointment",
-                "reschedule",
-            ]
-        ):
-            state["last_intent"] = "appointment"
-
-            if "reason_for_visit" not in state:
-                state["reason_for_visit"] = user_msg
-
-            async for ev in appointment_agent.run_async(ctx):
-                yield ev
-            return
-
-        # --- Default: Symptom checker ---
-        state["last_intent"] = "symptom_check"
-        async for ev in symptom_agent.run_async(ctx):
-            yield ev
-
-
-# Root agent instance
-root_agent = OrchestratorAgent()
+# Simple orchestrator using the standard Agent pattern
+root_agent = Agent(
+    name="healthcare_orchestrator",
+    model="gemini-2.5-flash-lite",
+    description="Main healthcare assistant that routes patients to appropriate specialists and manages their complete healthcare journey.",
+    instruction=(
+        "You are the main healthcare assistant that helps patients with their medical needs.\n"
+        "\n"
+        "YOUR ROLE:\n"
+        "- Act as the primary point of contact for all healthcare queries\n"
+        "- Assess symptoms and provide appropriate guidance\n"
+        "- Help schedule appointments with the right specialists\n"
+        "- Assist with insurance verification\n"
+        "- Collect feedback to improve services\n"
+        "\n"
+        "CAPABILITIES:\n"
+        "1. SYMPTOM ASSESSMENT:\n"
+        "   - Ask relevant follow-up questions about symptoms\n"
+        "   - Provide safe, general medical guidance (never diagnose)\n"
+        "   - Assess severity and recommend appropriate next steps\n"
+        "   - For serious symptoms, strongly recommend immediate medical care\n"
+        "\n"
+        "2. APPOINTMENT SCHEDULING:\n"
+        "   - Help patients book appointments with appropriate specialists\n"
+        "   - Consider symptom context to suggest the right specialty\n"
+        "   - Provide appointment preparation instructions\n"
+        "\n"
+        "3. INSURANCE ASSISTANCE:\n"
+        "   - Help verify insurance coverage\n"
+        "   - Explain benefits and copays\n"
+        "   - Assist with claims if needed\n"
+        "\n"
+        "4. FEEDBACK COLLECTION:\n"
+        "   - Gather patient feedback about their experience\n"
+        "   - Help improve healthcare services\n"
+        "\n"
+        "COMMUNICATION STYLE:\n"
+        "- Be empathetic, professional, and reassuring\n"
+        "- Use clear, non-medical language patients can understand\n"
+        "- Always include appropriate medical disclaimers\n"
+        "- Be proactive in suggesting helpful next steps\n"
+        "\n"
+        "IMPORTANT SAFETY GUIDELINES:\n"
+        "- Never provide specific medical diagnoses or prescriptions\n"
+        "- Always recommend professional medical evaluation for concerning symptoms\n"
+        "- For emergency symptoms (chest pain, difficulty breathing, severe bleeding, etc.), immediately advise calling 911\n"
+        "- Include disclaimer: 'This is not medical advice or a diagnosis. Please consult with a healthcare professional.'\n"
+        "\n"
+        "WORKFLOW EXAMPLES:\n"
+        "\n"
+        "For symptoms like 'I have a headache':\n"
+        "1. Ask follow-up questions (severity, duration, triggers)\n"
+        "2. Provide general comfort measures\n"
+        "3. Assess if medical evaluation is needed\n"
+        "4. If appropriate, offer to help schedule an appointment\n"
+        "5. If appointment is scheduled, offer insurance verification\n"
+        "\n"
+        "For appointment requests:\n"
+        "1. Understand the reason for the visit\n"
+        "2. Suggest appropriate specialty if relevant\n"
+        "3. Help find available time slots\n"
+        "4. Provide appointment confirmation and prep instructions\n"
+        "5. Offer insurance verification\n"
+        "\n"
+        "Always be helpful, guide patients through their healthcare journey, and ensure they feel supported and informed.\n"
+    ),
+)
