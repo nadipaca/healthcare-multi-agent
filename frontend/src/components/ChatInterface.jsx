@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, RefreshCw, User, Bot, AlertTriangle, Loader2 } from 'lucide-react';
 import { useChat } from '../hooks/useChat';
 
-const ChatInterface = () => {
+const ChatInterface = ({ selectedPatient, patientData }) => {
   const {
     sessionId,
     messages,
@@ -12,7 +12,7 @@ const ChatInterface = () => {
     needsHumanReview,
     sendMessage,
     newSession,
-  } = useChat();
+  } = useChat(null, selectedPatient);
 
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { chatService } from '../services/api';
 
-export const useChat = (initialSessionId = null) => {
+export const useChat = (initialSessionId = null, patientContext = null) => {
   const [sessionId, setSessionId] = useState(
     initialSessionId || `session-${Date.now()}`
   );
@@ -25,7 +25,17 @@ export const useChat = (initialSessionId = null) => {
     setError(null);
 
     try {
-      const response = await chatService.sendMessage(sessionId, text);
+      // Include patient context if available
+      const messagePayload = {
+        session_id: sessionId,
+        message: text,
+      };
+      
+      if (patientContext) {
+        messagePayload.patient_id = patientContext.patient_id;
+      }
+      
+      const response = await chatService.sendMessage(messagePayload.session_id, messagePayload.message, patientContext);
       
       // Handle backend response format: response.messages is an array of strings
       const responseContent = response.messages && response.messages.length > 0 
@@ -58,7 +68,7 @@ export const useChat = (initialSessionId = null) => {
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, patientContext]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
