@@ -67,3 +67,31 @@ root_agent = Agent(
         "Always be helpful, guide patients through their healthcare journey, and ensure they feel supported and informed.\n"
     ),
 )
+
+async def _update_patient_record_after_interaction(self, ctx, state):
+    """Automatically update patient record based on conversation"""
+    
+    patient_id = state.get("patient_id")
+    if not patient_id:
+        return
+    
+    # Update medical history if new conditions mentioned
+    new_conditions = state.get("identified_conditions", [])
+    if new_conditions:
+        for condition in new_conditions:
+            db_helper.add_medical_condition(patient_id, condition)
+    
+    # Update prescription status if refills discussed
+    rx_updates = state.get("prescription_updates", {})
+    if rx_updates:
+        for rx_id, updates in rx_updates.items():
+            db_helper.update_prescription(rx_id, updates)
+    
+    # Log the interaction for future reference
+    db_helper.log_patient_interaction(
+        patient_id=patient_id,
+        session_id=ctx.session.session_id,
+        interaction_type=state.get("last_intent", "general"),
+        summary=state.get("interaction_summary", ""),
+        timestamp=datetime.now().isoformat()
+    )

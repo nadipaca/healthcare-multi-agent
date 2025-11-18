@@ -26,12 +26,18 @@ from google.adk.events import Event  # ADK event type
 from api.models import ChatRequest, ChatResponse
 from adk_app.orchestrator_agent import root_agent
 from api.rate_limiter import rate_limiter
-from api.analytics import analytics 
+from api.analytics import analytics
+from api.testing_routes import router as testing_router
+from api.patient_routes import router as patient_router
 
 APP_NAME = "healthcare-multi-agent"
 USER_ID = "demo_user"
 
-app = FastAPI(title="Healthcare Symptom Checker (Module 1)")
+app = FastAPI(title="Healthcare Multi-Agent System")
+
+# Include testing routes
+app.include_router(testing_router)
+app.include_router(patient_router)
 
 # CORS configuration - more explicit for debugging
 app.add_middleware(
