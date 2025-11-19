@@ -8,42 +8,53 @@ import os
 
 # Create database directory if it doesn't exist
 os.makedirs(os.path.dirname(__file__), exist_ok=True)
+from api.security import hash_password
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'healthcare.db')
 
 def setup_database():
-    """Create tables and populate with sample data"""
+    """Create tables and populate with sample data
+       and authentication and file uploads
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
     # Create Patients table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS patients (
-            patient_id TEXT PRIMARY KEY,
+             patient_id TEXT PRIMARY KEY,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
             date_of_birth DATE,
-            email TEXT,
+            email TEXT UNIQUE NOT NULL,
             phone TEXT,
+            password_hash TEXT NOT NULL,
             address TEXT,
             insurance_id TEXT,
-            medical_history TEXT
+            medical_history TEXT,
+            role TEXT DEFAULT 'patient',
+            is_active BOOLEAN DEFAULT 1,
+            email_verified BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
         )
     ''')
     
     # Create Prescriptions table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS prescriptions (
-            rx_id TEXT PRIMARY KEY,
-            patient_id TEXT,
-            medication TEXT NOT NULL,
-            dosage TEXT,
-            instructions TEXT,
-            refills_remaining INTEGER,
-            last_filled DATE,
-            prescriber TEXT,
-            needs_renewal BOOLEAN DEFAULT 0,
-            FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+            file_id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL,
+            rx_id TEXT,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_type TEXT,
+            file_size INTEGER,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            uploaded_by TEXT,
+            notes TEXT,
+            FOREIGN KEY (patient_id) REFERENCES patients (patient_id),
+            FOREIGN KEY (rx_id) REFERENCES prescriptions (rx_id)
         )
     ''')
     
@@ -91,6 +102,23 @@ def setup_database():
             FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
         )
     ''')
+
+     # Medical Documents table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS medical_documents (
+            document_id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL,
+            document_type TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            uploaded_by TEXT,
+            category TEXT,
+            notes TEXT,
+            FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+        )
+    ''')
     
     # Create Lab Results table
     cursor.execute('''
@@ -119,25 +147,64 @@ def setup_database():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+     # Session tokens table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS session_tokens (
+            token_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            is_revoked BOOLEAN DEFAULT 0,
+            FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+        )
+    ''')
+    
+    # Audit log for security
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_log (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id TEXT,
+            action TEXT NOT NULL,
+            resource TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            details TEXT
+        )
+    ''')
     
     print("✓ Database tables created successfully")
     
-    # Insert sample patients
+    # Insert sample patients with hashed passwords
     sample_patients = [
-        ('PAT001', 'John', 'Doe', '1985-03-15', 'john.doe@email.com', '555-0101', 
-         '123 Main St, City, State 12345', 'INS001', 'Hypertension, Type 2 Diabetes'),
+        ('PAT001', 'John', 'Doe', '1985-03-15', 'john.doe@email.com', '555-0101',
+         hash_password('password123'), '123 Main St, City, State 12345', 'INS001',
+         'Hypertension, Type 2 Diabetes', 'patient', 1, 1),
         ('PAT002', 'Jane', 'Smith', '1990-07-22', 'jane.smith@email.com', '555-0102',
-         '456 Oak Ave, City, State 12345', 'INS002', 'Migraine, Asthma'),
+         hash_password('password123'), '456 Oak Ave, City, State 12345', 'INS002',
+         'Migraine, Asthma', 'patient', 1, 1),
         ('PAT003', 'Mike', 'Johnson', '1978-11-08', 'mike.j@email.com', '555-0103',
-         '789 Pine Rd, City, State 12345', 'INS003', 'Arthritis'),
+         hash_password('password123'), '789 Pine Rd, City, State 12345', 'INS003',
+         'Arthritis', 'patient', 1, 1),
+        ('ADMIN001', 'Admin', 'User', '1980-01-01', 'admin@healthcare.com', '555-0100',
+         hash_password('admin123'), 'Healthcare Center', None, '', 'admin', 1, 1),
     ]
     
     cursor.executemany('''
         INSERT OR IGNORE INTO patients 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (patient_id, first_name, last_name, date_of_birth, email, phone, 
+         password_hash, address, insurance_id, medical_history, role, is_active, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', sample_patients)
     
     print(f"✓ Inserted {len(sample_patients)} sample patients")
+
+    print(f"✓ Database setup complete with authentication!")
+    print(f"\n📋 Test Credentials:")
+    print(f"   Email: john.doe@email.com | Password: password123")
+    print(f"   Email: admin@healthcare.com | Password: admin123")
     
     # Insert sample prescriptions
     today = datetime.now()

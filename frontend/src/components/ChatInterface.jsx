@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, RefreshCw, User, Bot, AlertTriangle, Loader2 } from 'lucide-react';
+import { Send, RefreshCw, User, Bot, AlertTriangle, Loader2, Paperclip, X } from 'lucide-react';
 import { useChat } from '../hooks/useChat';
+import { fileService } from '../services/api';
 
 const ChatInterface = ({ selectedPatient, patientData }) => {
   const {
@@ -18,6 +19,9 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
   const messagesEndRef = useRef(null);
   const [proactiveActions, setProactiveActions] = useState([]);
   const [currentFlow, setCurrentFlow] = useState(null);
+   const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -63,22 +67,66 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
     }
   }, [messages]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
-    
-    // Clear proactive actions when user sends a message
-    setProactiveActions([]);
-    
-    await sendMessage(inputValue);
-    setInputValue('');
-  };
-
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
     }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file size (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+   const handleSubmit = async (e) => {
+    e.preventDefault();
+    if ((!inputValue.trim() && !selectedFile) || isLoading) return;
+    
+    setProactiveActions([]);
+    
+    // If there's a file, upload it first
+    if (selectedFile) {
+      setUploadingFile(true);
+      try {
+        const uploadResponse = await fileService.uploadPrescription(
+          selectedFile,
+          null,
+          inputValue || 'Uploaded from chat'
+        );
+        
+        // Send message about the uploaded file
+        await sendMessage(
+          inputValue || `I've uploaded a file: ${selectedFile.name}`,
+          { file_id: uploadResponse.file_id }
+        );
+        
+        handleRemoveFile();
+      } catch (error) {
+        alert('File upload failed: ' + (error.response?.data?.detail || error.message));
+      } finally {
+        setUploadingFile(false);
+      }
+    } else {
+      // Just send text message
+      await sendMessage(inputValue);
+    }
+    
+    setInputValue('');
   };
 
   const quickSuggestions = [
@@ -89,9 +137,9 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
   ];
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-gray-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white p-4 shadow-lg">
+      <div className="bg-gradient-to-r from-primary to-secondary text-white p-4 shadow-lg flex-shrink-0">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">🏥 Healthcare Assistant</h1>
@@ -109,7 +157,7 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
 
       {/* Agent Trace */}
       {agentTrace.length > 0 && (
-        <div className="bg-blue-50 border-b border-blue-100 p-3">
+        <div className="bg-blue-50 border-b border-blue-100 p-3 flex-shrink-0">
           <div className="max-w-4xl mx-auto flex items-center gap-2 text-sm">
             <span className="text-blue-700 font-medium">Active:</span>
             {agentTrace.map((agent, idx) => (
@@ -123,7 +171,7 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
 
       {/* ENHANCED: Proactive Actions */}
       {proactiveActions.length > 0 && (
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-100 p-4">
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-100 p-4 flex-shrink-0">
           <div className="max-w-4xl mx-auto">
             <p className="text-sm font-medium text-green-700 mb-2">
               🤖 I can help you with next steps:
@@ -146,8 +194,8 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
         </div>
       )}
 
-      {/* Messages Area - keeping existing code */}
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* Messages Area*/}
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="max-w-4xl mx-auto">
           {/* Welcome Message */}
           {messages.length === 0 && (
@@ -240,26 +288,82 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
       </div>
 
       {/* Input Area - keeping existing code */}
-      <div className="border-t bg-white p-4 shadow-lg">
+   <div className="border-t bg-white p-4 shadow-lg flex-shrink-0">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+          {/* File Preview */}
+          {selectedFile && (
+            <div className="mb-3 flex items-center gap-2 bg-blue-50 p-3 rounded-lg border border-blue-200">
+              <Paperclip size={16} className="text-blue-600" />
+              <span className="text-sm text-blue-800 flex-1">{selectedFile.name}</span>
+              <span className="text-xs text-blue-600">
+                {(selectedFile.size / 1024).toFixed(1)} KB
+              </span>
+              <button
+                type="button"
+                onClick={handleRemoveFile}
+                className="text-red-600 hover:text-red-800"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2">
+            {/* File Upload Button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              onChange={handleFileSelect}
+              className="hidden"
+              id="file-upload-chat"
+            />
+            <label
+              htmlFor="file-upload-chat"
+              className="flex items-center justify-center w-12 h-12 border-2 border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              title="Upload prescription or document"
+            >
+              <Paperclip size={20} className="text-gray-600" />
+            </label>
+
+            {/* Text Input */}
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              disabled={isLoading}
+              placeholder={
+                selectedFile 
+                  ? "Add a note about this file (optional)..." 
+                  : "Type your message or attach a file..."
+              }
+              disabled={isLoading || uploadingFile}
               className="flex-1 px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100"
             />
+
+            {/* Send Button */}
             <button
               type="submit"
-              disabled={isLoading || !inputValue.trim()}
+              disabled={isLoading || uploadingFile || (!inputValue.trim() && !selectedFile)}
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              <Send size={18} />
-              Send
+              {uploadingFile ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Send size={18} />
+                  Send
+                </>
+              )}
             </button>
+          </div>
+
+          {/* File Upload Hint */}
+          <div className="mt-2 text-xs text-gray-500 text-center">
+            📎 Attach prescription images or documents (JPG, PNG, PDF • Max 10MB)
           </div>
         </form>
       </div>
