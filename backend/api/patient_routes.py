@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, Literal, List
 import sys
 import os
+import re
 import uuid
 from datetime import datetime
 
@@ -56,6 +57,29 @@ class FileUploadResponse(BaseModel):
     file_type: str
     uploaded_at: str
     message: str
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
+    """
+    Validate password strength
+    Returns (is_valid, error_message)
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number"
+    
+    # Optional: Check for special characters
+    # if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+    #     return False, "Password must contain at least one special character"
+    
+    return True, ""
 
 # ============= Authentication Endpoints =============
 
@@ -191,16 +215,31 @@ async def authenticate_patient(request: PatientAuthRequest):
 @router.post("/register", response_model=TokenResponse)
 async def register_new_patient(patient_data: NewPatientRegistration):
     """
-    Register a new patient with password hashing
+    Register a new patient with password validation
     Returns JWT tokens
     """
     try:
+        # Validate password strength
+        is_valid, error_msg = validate_password_strength(patient_data.password)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
         # Check if email already exists
         existing = db_helper.get_patient_by_email(patient_data.email)
         if existing:
             raise HTTPException(
                 status_code=400,
-                detail="Email already registered"
+                detail="An account with this email already exists. Please sign in instead."
+            )
+        
+        # Validate age (must be 18+)
+        from datetime import datetime
+        dob = datetime.strptime(patient_data.date_of_birth, '%Y-%m-%d')
+        age = (datetime.now() - dob).days // 365
+        if age < 18:
+            raise HTTPException(
+                status_code=400,
+                detail="You must be at least 18 years old to create an account"
             )
         
         # Generate new patient ID
@@ -220,7 +259,10 @@ async def register_new_patient(patient_data: NewPatientRegistration):
             address=patient_data.address,
             insurance_id=patient_data.insurance_id,
             password_hash=hashed_password,
-            medical_history=""
+            medical_history="",
+            role="patient",
+            is_active=True,
+            email_verified=True  # Auto-verify for now, can add email verification later
         )
         
         # Create tokens

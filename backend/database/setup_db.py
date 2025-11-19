@@ -18,6 +18,10 @@ def setup_database():
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
+    # Hash password for demo accounts
+    demo_password = hash_password('demo2024!')  # Stronger demo password
+    admin_password = hash_password('Admin@2024!')  # Strong admin password
     
     # Create Patients table
     cursor.execute('''
@@ -179,17 +183,14 @@ def setup_database():
     
     # Insert sample patients with hashed passwords
     sample_patients = [
-        ('PAT001', 'John', 'Doe', '1985-03-15', 'john.doe@email.com', '555-0101',
-         hash_password('password123'), '123 Main St, City, State 12345', 'INS001',
-         'Hypertension, Type 2 Diabetes', 'patient', 1, 1),
-        ('PAT002', 'Jane', 'Smith', '1990-07-22', 'jane.smith@email.com', '555-0102',
-         hash_password('password123'), '456 Oak Ave, City, State 12345', 'INS002',
-         'Migraine, Asthma', 'patient', 1, 1),
-        ('PAT003', 'Mike', 'Johnson', '1978-11-08', 'mike.j@email.com', '555-0103',
-         hash_password('password123'), '789 Pine Rd, City, State 12345', 'INS003',
-         'Arthritis', 'patient', 1, 1),
-        ('ADMIN001', 'Admin', 'User', '1980-01-01', 'admin@healthcare.com', '555-0100',
-         hash_password('admin123'), 'Healthcare Center', None, '', 'admin', 1, 1),
+        # Demo accounts for testing/presentation
+        ('DEMO001', 'Demo', 'Patient', '1990-01-01', 'demo@healthcare.test', '555-9999',
+         demo_password, 'Demo Address', 'DEMO-INS',
+         'Sample medical history for demo', 'patient', 1, 1),
+        
+        # Admin account
+        ('ADMIN001', 'System', 'Administrator', '1980-01-01', 'admin@healthcare.com', '555-0000',
+         admin_password, 'Healthcare Center', None, '', 'admin', 1, 1),
     ]
     
     cursor.executemany('''
@@ -199,12 +200,12 @@ def setup_database():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', sample_patients)
     
-    print(f"✓ Inserted {len(sample_patients)} sample patients")
-
-    print(f"✓ Database setup complete with authentication!")
-    print(f"\n📋 Test Credentials:")
-    print(f"   Email: john.doe@email.com | Password: password123")
-    print(f"   Email: admin@healthcare.com | Password: admin123")
+    print(f"✓ Created {len(sample_patients)} demo/admin accounts")
+    print(f"\n📋 Demo Credentials (FOR TESTING ONLY):")
+    print(f"   Email: demo@healthcare.test | Password: demo2024!")
+    print(f"   Email: admin@healthcare.com | Password: Admin@2024!")
+    print(f"\n⚠️  PRODUCTION: Users must create their own accounts via registration")
+    
     
     # Insert sample prescriptions
     today = datetime.now()

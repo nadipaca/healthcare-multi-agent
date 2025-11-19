@@ -69,7 +69,9 @@ def generate_patient_id() -> str:
 def create_patient(patient_id: str, first_name: str, last_name: str, 
                   date_of_birth: str, email: Optional[str], phone: Optional[str],
                   address: Optional[str], insurance_id: Optional[str], 
-                  medical_history: str = "") -> Dict:
+                  medical_history: str = "", password_hash: Optional[str] = None,
+                  role: str = "patient", is_active: bool = True, 
+                  email_verified: bool = False) -> Dict:
     """Create a new patient record"""
     conn = get_db_connection()
     conn.row_factory = dict_factory
@@ -77,10 +79,12 @@ def create_patient(patient_id: str, first_name: str, last_name: str,
     
     cursor.execute('''
         INSERT INTO patients (patient_id, first_name, last_name, date_of_birth, 
-                            email, phone, address, insurance_id, medical_history)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            email, phone, address, insurance_id, medical_history,
+                            password_hash, role, is_active, email_verified, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ''', (patient_id, first_name, last_name, date_of_birth, email, phone, 
-          address, insurance_id, medical_history))
+          address, insurance_id, medical_history, password_hash, role, 
+          1 if is_active else 0, 1 if email_verified else 0))
     
     conn.commit()
     patient = get_patient_by_id(patient_id)
