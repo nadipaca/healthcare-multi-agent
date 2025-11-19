@@ -145,6 +145,13 @@ export const chatService = {
 };
 
 export const analyticsService = {
+  getDashboard: async (timeRange = 24) => {
+    const response = await api.get('/api/analytics/dashboard', {
+      params: { hours: timeRange },
+    });
+    return response.data;
+  },
+
   getAnalytics: async () => {
     const response = await api.get('/api/analytics');
     return response.data;
