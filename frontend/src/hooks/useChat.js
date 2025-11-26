@@ -93,5 +93,6 @@ export const useChat = (initialSessionId = null, patientContext = null) => {
     sendMessage,
     clearChat,
     newSession,
+    setMessages
   };
 };

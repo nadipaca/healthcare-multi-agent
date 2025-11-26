@@ -3,9 +3,11 @@ import { Send, RefreshCw, User, Bot, AlertTriangle, Loader2, Paperclip, X } from
 import { useChat } from '../hooks/useChat';
 import { fileService } from '../services/api';
 
-const ChatInterface = ({ selectedPatient, patientData }) => {
+const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessionId, 
+    initialMessages = []
+  }) => {
   const {
-    sessionId,
+    sessionId: hookSessionId,
     messages,
     isLoading,
     error,
@@ -13,7 +15,10 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
     needsHumanReview,
     sendMessage,
     newSession,
-  } = useChat(null, selectedPatient);
+    setMessages,
+  } = useChat(externalSessionId, patientData || selectedPatient);
+
+  const sessionId = externalSessionId || hookSessionId;
 
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef(null);
@@ -27,6 +32,24 @@ const ChatInterface = ({ selectedPatient, patientData }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    const formattedMessages = (initialMessages || []).map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      agent_name: msg.agent_name,
+      needs_human_review: msg.needs_human_review
+    }));
+    setMessages(formattedMessages);
+  }, [initialMessages, setMessages]);
+
+  useEffect(() => {
+    if (!externalSessionId) {
+      // create a new chat session inside the hook and clear messages
+      newSession();
+    }
+  }, [externalSessionId, newSession]);
 
   // ENHANCED: Handle response and set proactive actions
   useEffect(() => {
