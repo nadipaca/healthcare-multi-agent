@@ -5,6 +5,11 @@ import sqlite3
 import os
 from typing import List, Dict, Optional
 from datetime import datetime
+import uuid
+
+# ... existing imports and functions ...
+
+# ============= Chat History Functions =============
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'healthcare.db')
 
@@ -474,3 +479,172 @@ def update_prescription(rx_id: str, updates: Dict) -> Dict:
     conn.close()
     prescription = get_prescription_by_id(rx_id)
     return prescription
+
+def create_chat_session(patient_id: str, initial_message: str = None) -> Dict:
+    """Create a new chat session"""
+    import uuid
+    
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    
+    session_id = f"session-{uuid.uuid4().hex[:16]}"
+    
+    # Generate a title from the first message (or use default)
+    title = initial_message[:50] + "..." if initial_message and len(initial_message) > 50 else initial_message or "New Conversation"
+    
+    cursor.execute('''
+        INSERT INTO chat_sessions (session_id, patient_id, title, created_at, last_message_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ''', (session_id, patient_id, title))
+    
+    conn.commit()
+    
+    cursor.execute('SELECT * FROM chat_sessions WHERE session_id = ?', (session_id,))
+    session = cursor.fetchone()
+    conn.close()
+    
+    return session
+
+def get_patient_chat_sessions(patient_id: str, limit: int = 5) -> List[Dict]:
+    """Get patient's recent chat sessions"""
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT 
+            s.*,
+            COUNT(m.message_id) as message_count,
+            (SELECT content FROM chat_messages 
+             WHERE session_id = s.session_id AND role = 'user' 
+             ORDER BY timestamp ASC LIMIT 1) as first_message
+        FROM chat_sessions s
+        LEFT JOIN chat_messages m ON s.session_id = m.session_id
+        WHERE s.patient_id = ? AND s.is_active = 1
+        GROUP BY s.session_id
+        ORDER BY s.last_message_at DESC
+        LIMIT ?
+    ''', (patient_id, limit))
+    
+    sessions = cursor.fetchall()
+    conn.close()
+    return sessions
+
+def get_session_messages(session_id: str) -> List[Dict]:
+    """Get all messages for a session"""
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT * FROM chat_messages
+        WHERE session_id = ?
+        ORDER BY timestamp ASC
+    ''', (session_id,))
+    
+    messages = cursor.fetchall()
+    conn.close()
+    return messages
+
+def save_chat_message(
+    session_id: str,
+    role: str,
+    content: str,
+    agent_name: Optional[str] = None,
+    needs_human_review: bool = False
+) -> Dict:
+    """Save a chat message"""
+    import uuid
+    
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    
+    message_id = f"msg-{uuid.uuid4().hex[:16]}"
+    
+    cursor.execute('''
+        INSERT INTO chat_messages 
+        (message_id, session_id, role, content, agent_name, needs_human_review, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ''', (message_id, session_id, role, content, agent_name, 1 if needs_human_review else 0))
+    
+    # Update session's last_message_at
+    cursor.execute('''
+        UPDATE chat_sessions 
+        SET last_message_at = CURRENT_TIMESTAMP
+        WHERE session_id = ?
+    ''', (session_id,))
+    
+    # Update session title if it's the first user message
+    if role == 'user':
+        cursor.execute('''
+            SELECT COUNT(*) as count FROM chat_messages 
+            WHERE session_id = ? AND role = 'user'
+        ''', (session_id,))
+        
+        count_result = cursor.fetchone()
+        if count_result and count_result['count'] == 1:
+            # This is the first user message - use it as title
+            title = content[:50] + "..." if len(content) > 50 else content
+            cursor.execute('''
+                UPDATE chat_sessions 
+                SET title = ?
+                WHERE session_id = ?
+            ''', (title, session_id))
+    
+    conn.commit()
+    
+    cursor.execute('SELECT * FROM chat_messages WHERE message_id = ?', (message_id,))
+    message = cursor.fetchone()
+    conn.close()
+    
+    return message
+
+def delete_chat_session(session_id: str, patient_id: str) -> bool:
+    """Soft delete a chat session"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verify ownership
+    cursor.execute('''
+        SELECT patient_id FROM chat_sessions WHERE session_id = ?
+    ''', (session_id,))
+    
+    result = cursor.fetchone()
+    if not result or result[0] != patient_id:
+        conn.close()
+        return False
+    
+    # Soft delete
+    cursor.execute('''
+        UPDATE chat_sessions 
+        SET is_active = 0
+        WHERE session_id = ?
+    ''', (session_id,))
+    
+    conn.commit()
+    conn.close()
+    return True
+
+def get_or_create_session(patient_id: str, session_id: Optional[str] = None) -> str:
+    """Get existing session or create new one"""
+    if session_id:
+        # Check if session exists and belongs to patient
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT session_id FROM chat_sessions 
+            WHERE session_id = ? AND patient_id = ? AND is_active = 1
+        ''', (session_id, patient_id))
+        
+        existing = cursor.fetchone()
+        conn.close()
+        
+        if existing:
+            return session_id
+    
+    # Create new session
+    new_session = create_chat_session(patient_id)
+    return new_session['session_id']

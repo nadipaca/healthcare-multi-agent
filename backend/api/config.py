@@ -3,10 +3,13 @@ from typing import Optional
 import os
 
 class Settings(BaseSettings):
-    # Google / Gemini configuration
+    # Google / Gemini configuration (kept for backward compatibility)
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
     google_project_id: str = "YOUR_GCP_PROJECT_ID"
     google_location: str = "us-central1"
+    
+    # OpenAI configuration
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 
     # JWT Authentication
     jwt_secret: str = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-this-in-production-min-32-chars")

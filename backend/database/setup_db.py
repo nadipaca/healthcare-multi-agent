@@ -138,6 +138,33 @@ def setup_database():
             FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
         )
     ''')
+
+    # NEW: Chat Sessions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            session_id TEXT PRIMARY KEY,
+            patient_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            title TEXT,
+            is_active INTEGER DEFAULT 1,
+            FOREIGN KEY (patient_id) REFERENCES patients(patient_id)
+        )
+    ''')
+    
+    # NEW: Chat Messages table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            message_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,  -- 'user' or 'assistant' or 'system'
+            content TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            agent_name TEXT,
+            needs_human_review INTEGER DEFAULT 0,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(session_id)
+        )
+    ''')
     
     # Create Feedback table
     cursor.execute('''
@@ -298,6 +325,11 @@ def setup_database():
     ''', sample_labs)
     
     print(f"✓ Inserted {len(sample_labs)} lab results")
+
+    # Create indexes for faster queries
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_patient ON chat_sessions(patient_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_last_message ON chat_sessions(last_message_at)')
     
     conn.commit()
     conn.close()

@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Verify API key is available
-if not os.getenv("GOOGLE_API_KEY"):
-    print("ERROR: GOOGLE_API_KEY not set in environment!")
+if not os.getenv("OPENAI_API_KEY"):
+    print("ERROR: OPENAI_API_KEY not set in environment!")
     print("Please set it in your .env file or as an environment variable")
 
 from fastapi import FastAPI, Request
@@ -27,8 +27,10 @@ from api.models import ChatRequest, ChatResponse
 from adk_app.orchestrator_agent import root_agent
 from api.rate_limiter import rate_limiter
 from api.analytics import analytics
+from database import db_helper
 from api.testing_routes import router as testing_router
 from api.patient_routes import router as patient_router
+from api.chat_history_routes import router as chat_history_router
 
 APP_NAME = "healthcare-multi-agent"
 USER_ID = "demo_user"
@@ -38,6 +40,7 @@ app = FastAPI(title="Healthcare Multi-Agent System")
 # Include testing routes
 app.include_router(testing_router)
 app.include_router(patient_router)
+app.include_router(chat_history_router)
 
 # CORS configuration - more explicit for debugging
 app.add_middleware(
@@ -139,15 +142,31 @@ async def chat(request: Request, payload: ChatRequest):
     - Detects 'NEEDS_HUMAN_REVIEW: true' marker for HITL.
     """
     session_id = payload.session_id or str(uuid.uuid4())
+    patient_id = payload.patient_id  # Get patient_id from payload
     
     # Apply rate limiting
     await rate_limiter.check_rate_limit(session_id)
-    
+
     # Start timing for analytics
     start_time = time.time()
 
     # Ensure session exists
     await ensure_session(session_id)
+
+    # Only create/get database session if patient_id is provided
+    if patient_id:
+        try:
+            canonical_session_id = db_helper.get_or_create_session(patient_id, session_id)
+            session_id = canonical_session_id or session_id
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+        
+        try:
+            db_helper.save_chat_message(session_id=session_id, role='user', content=payload.message)
+        except Exception:
+            import traceback
+            traceback.print_exc()
 
     runner = get_runner()
 
@@ -206,6 +225,19 @@ async def chat(request: Request, payload: ChatRequest):
         duration_ms=duration_ms,
         hitl_flagged=needs_human_review,
     )
+
+    try:
+        for msg in messages:
+            db_helper.save_chat_message(
+                session_id=session_id,
+                role='assistant',
+                content=msg,
+                agent_name=primary_agent,
+                needs_human_review=needs_human_review
+            )
+    except Exception:
+        import traceback
+        traceback.print_exc()
 
     return ChatResponse(
         session_id=session_id,
