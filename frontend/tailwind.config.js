@@ -7,9 +7,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#667eea',
-        secondary: '#764ba2',
+        primary: '#6366F1', // indigo-500
+        secondary: '#06B6D4', // cyan-500
       },
+      transitionProperty: {
+        'width': 'width',
+      },
+      zIndex: {
+        '60': '60',
+      }
     },
   },
   plugins: [],

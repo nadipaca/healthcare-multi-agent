@@ -176,4 +176,19 @@ export const analyticsService = {
   },
 };
 
+export const patientService = {
+  getCurrentUser: async () => {
+    const response = await api.get('/api/patient/me');
+    return response.data;
+  },
+
+  addMedicalHistory: async (entry) => {
+    // POST to /api/patient/me/medical-history (uses auth from interceptor/localStorage)
+    const response = await api.post('/api/patient/me/medical-history', entry);
+    return response.data;
+  },
+
+  // ...other patient-related calls...
+};
+
 export default api;

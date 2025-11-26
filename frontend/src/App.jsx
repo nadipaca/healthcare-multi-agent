@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PatientAuth from './components/PatientAuth';
 import NewPatientRegistration from './components/NewPatientRegistration';
@@ -11,16 +11,35 @@ function App() {
   const [patientData, setPatientData] = useState(null);
   const [showRegistration, setShowRegistration] = useState(false);
 
-  const handlePatientAuthenticated = (patient, fullData) => {
-    setAuthenticatedPatient(patient);
-    setPatientData(fullData);
-    setShowRegistration(false);
-  };
+  useEffect(() => {
+  const patient = localStorage.getItem('patient');
+  const patientData = localStorage.getItem('patientData');
+  if (patient) {
+    setAuthenticatedPatient(JSON.parse(patient));
+  }
+  if (patientData) {
+    setPatientData(JSON.parse(patientData));
+  }
+}, []);
+
+    const handlePatientAuthenticated = (patient, response) => {
+      setAuthenticatedPatient(patient);
+      setPatientData(response);
+      // store tokens and patient in localStorage using the actual response object
+      localStorage.setItem('access_token', response.access_token);
+      localStorage.setItem('refresh_token', response.refresh_token);
+      localStorage.setItem('patient', JSON.stringify(response.patient));
+      setShowRegistration(false);
+    };
 
   const handleLogout = () => {
     setAuthenticatedPatient(null);
     setPatientData(null);
     setShowRegistration(false);
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('patient');
+    setAuthenticatedPatient(null);
   };
 
   // Show registration screen
@@ -59,7 +78,7 @@ function App() {
               />
             } 
           />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<DashboardPage />}/>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
