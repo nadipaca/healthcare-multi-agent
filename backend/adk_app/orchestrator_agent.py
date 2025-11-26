@@ -1,9 +1,12 @@
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 
-# Simple orchestrator using the standard Agent pattern
+# Use LiteLLM wrapper for OpenAI models
+llm = LiteLlm(model="gpt-4o-mini")
+
 root_agent = Agent(
     name="healthcare_orchestrator",
-    model="gemini-2.5-flash-lite",
+    model=llm,
     description="Main healthcare assistant that routes patients to appropriate specialists and manages their complete healthcare journey.",
     instruction=(
         "You are the main healthcare assistant that helps patients with their medical needs.\n"

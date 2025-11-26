@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User, Mail, Lock, Loader2 } from 'lucide-react';
 import { authService } from '../services/api';
 
-const PatientAuth = ({ onPatientAuthenticated }) => {
+const PatientAuth = ({ onPatientAuthenticated, onSwitchToRegister }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,7 +17,7 @@ const PatientAuth = ({ onPatientAuthenticated }) => {
       const response = await authService.login(email, password);
       onPatientAuthenticated(response.patient, response);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed');
+      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -31,7 +31,7 @@ const PatientAuth = ({ onPatientAuthenticated }) => {
             <User className="text-white" size={32} />
           </div>
           <h1 className="text-3xl font-bold text-gray-800">Healthcare Assistant</h1>
-          <p className="text-gray-600 mt-2">Secure access to your medical records</p>
+          <p className="text-gray-600 mt-2">Sign in to access your medical records</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -45,7 +45,7 @@ const PatientAuth = ({ onPatientAuthenticated }) => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="john.doe@email.com"
+              placeholder="your.email@example.com"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
             />
@@ -64,11 +64,12 @@ const PatientAuth = ({ onPatientAuthenticated }) => {
               placeholder="Enter your password"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              minLength={8}
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -89,12 +90,24 @@ const PatientAuth = ({ onPatientAuthenticated }) => {
           </button>
         </form>
 
+        {/* Registration Link */}
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-600">
-            Test Credentials: <br />
-            <strong>Email:</strong> john.doe@email.com <br />
-            <strong>Password:</strong> password123
+            Don't have an account?{' '}
+            <button
+              onClick={onSwitchToRegister}
+              className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
+            >
+              Create Account
+            </button>
           </p>
+        </div>
+
+        {/* Forgot Password (Optional) */}
+        <div className="mt-4 text-center">
+          <button className="text-sm text-gray-500 hover:text-gray-700">
+            Forgot password?
+          </button>
         </div>
       </div>
     </div>

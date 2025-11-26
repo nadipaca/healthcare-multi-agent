@@ -5,6 +5,7 @@ from typing import List, Optional
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
+    patient_id: Optional[str] = None
 
 
 from pydantic import BaseModel

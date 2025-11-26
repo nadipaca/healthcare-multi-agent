@@ -62,21 +62,21 @@ export const authService = {
       email,
       password,
     });
-    
+
     // Store tokens
     localStorage.setItem('access_token', response.data.access_token);
     localStorage.setItem('refresh_token', response.data.refresh_token);
-    
+
     return response.data;
   },
 
   register: async (userData) => {
     const response = await axios.post(`${API_BASE}/api/patient/register`, userData);
-    
+
     // Store tokens
     localStorage.setItem('access_token', response.data.access_token);
     localStorage.setItem('refresh_token', response.data.refresh_token);
-    
+
     return response.data;
   },
 
@@ -134,17 +134,30 @@ export const fileService = {
 
 
 export const chatService = {
-  sendMessage: async (sessionId, message, metadata = {}) => {
-    const response = await api.post('/api/chat', {
+  sendMessage: async (sessionId, message, patientContext = {}) => {
+    const payload = {
       session_id: sessionId,
       message: message,
-      metadata: metadata, // Include file_id if file was uploaded
-    });
+    };
+
+    // Include patient_id if available
+    if (patientContext && patientContext.patient_id) {
+      payload.patient_id = patientContext.patient_id;
+    }
+
+    const response = await api.post('/api/chat', payload);
     return response.data;
   },
 };
 
 export const analyticsService = {
+  getDashboard: async (timeRange = 24) => {
+    const response = await api.get('/api/analytics/dashboard', {
+      params: { hours: timeRange },
+    });
+    return response.data;
+  },
+
   getAnalytics: async () => {
     const response = await api.get('/api/analytics');
     return response.data;

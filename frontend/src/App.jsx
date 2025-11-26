@@ -9,40 +9,36 @@ import Navigation from './components/Navigation';
 function App() {
   const [authenticatedPatient, setAuthenticatedPatient] = useState(null);
   const [patientData, setPatientData] = useState(null);
-  const [isNewPatient, setIsNewPatient] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
 
-  const handlePatientAuthenticated = (patient, fullData, newPatientInfo) => {
-    if (newPatientInfo?.isNew) {
-      // Handle new patient registration
-      setIsNewPatient(true);
-      // You could show a registration form here
-    } else {
-      setAuthenticatedPatient(patient);
-      setPatientData(fullData);
-      setIsNewPatient(false);
-    }
+  const handlePatientAuthenticated = (patient, fullData) => {
+    setAuthenticatedPatient(patient);
+    setPatientData(fullData);
+    setShowRegistration(false);
   };
 
   const handleLogout = () => {
     setAuthenticatedPatient(null);
     setPatientData(null);
-    setIsNewPatient(false);
+    setShowRegistration(false);
   };
 
-  // Show authentication screen if not logged in
-  if (!authenticatedPatient && !isNewPatient) {
-    return <PatientAuth onPatientAuthenticated={handlePatientAuthenticated} />;
-  }
-
-  // Show registration flow for new patients
-  if (isNewPatient) {
+  // Show registration screen
+  if (!authenticatedPatient && showRegistration) {
     return (
       <NewPatientRegistration 
-        onComplete={(patient, data) => {
-          setAuthenticatedPatient(patient);
-          setPatientData(data);
-          setIsNewPatient(false);
-        }}
+        onComplete={handlePatientAuthenticated}
+        onBackToLogin={() => setShowRegistration(false)}
+      />
+    );
+  }
+
+  // Show login screen
+  if (!authenticatedPatient) {
+    return (
+      <PatientAuth 
+        onPatientAuthenticated={handlePatientAuthenticated}
+        onSwitchToRegister={() => setShowRegistration(true)}
       />
     );
   }
