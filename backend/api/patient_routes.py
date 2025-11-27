@@ -8,7 +8,8 @@ import re
 import uuid
 from datetime import datetime
 from api.gcp_ocr import extract_text_from_file
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
+from api.gcs_storage import upload_file_to_gcs
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import db_helper
@@ -445,13 +446,9 @@ async def upload_prescription(
             raise HTTPException(status_code=400, detail=validation["error"])
         
         # Save file
-        file_info = await save_uploaded_file(
-            file=file,
-            patient_id=patient_id,
-            category="prescriptions"
-        )
-        
-        # Save to database
+        file_info = await save_uploaded_file(file=file, patient_id=patient_id, category="prescriptions")
+        gcs_path = f"prescriptions/{patient_id}/{file_info['stored_name']}"
+        gcs_uri = upload_file_to_gcs(file_info["file_path"], gcs_path, content_type=file_info["file_type"])
         document = db_helper.save_prescription_file(
             patient_id=patient_id,
             rx_id=rx_id,
@@ -459,7 +456,8 @@ async def upload_prescription(
             file_path=file_info["file_path"],
             file_type=file_info["file_type"],
             file_size=file_info["file_size"],
-            notes=notes
+            notes=notes,
+            gcs_uri=gcs_uri
         )
         
         return FileUploadResponse(
@@ -492,15 +490,9 @@ async def upload_lab_result(
             raise HTTPException(status_code=400, detail=validation["error"])
         
         # Save file to disk
-        file_info = await save_uploaded_file(
-            file=file,
-            patient_id=patient_id,
-            category="lab_results"
-        )
-
-        ocr_text = extract_text_from_file(file_info["file_path"], file.content_type)
-        
-        # Save to database
+        file_info = await save_uploaded_file(file=file, patient_id=patient_id, category="lab_results")
+        gcs_path = f"labs/{patient_id}/{file_info['stored_name']}"
+        gcs_uri = upload_file_to_gcs(file_info["file_path"], gcs_path, content_type=file_info["file_type"])
         document = db_helper.save_lab_result_file(
             patient_id=patient_id,
             test_name=test_name,
@@ -509,7 +501,8 @@ async def upload_lab_result(
             file_type=file_info["file_type"],
             file_size=file_info["file_size"],
             notes=notes,
-            extracted_text=ocr_text or None
+            extracted_text=ocr_text or None,
+            gcs_uri=gcs_uri
         )
         
         return {
@@ -718,30 +711,17 @@ async def add_lab_result(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/file/{file_id}/download")
-async def download_file(
-    file_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Download a file the patient has uploaded."""
-    from fastapi import HTTPException
-
+async def download_file(file_id: str, current_user: dict = Depends(get_current_user)):
     file_info = db_helper.get_file_by_id(file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
-
-    # Authorization: must be owner or admin
     if (
         file_info["patient_id"] != current_user.get("patient_id")
         and current_user.get("role") != "admin"
     ):
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
-
-    file_path = file_info["file_path"]
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found on server")
-
-    return FileResponse(
-        path=file_path,
-        media_type="application/octet-stream",
-        filename=file_info.get("file_name") or os.path.basename(file_path),
-    )
+        raise HTTPException(status_code=403, detail="Not authorized")
+    gcs_uri = file_info.get("gcs_uri")
+    if not gcs_uri:
+        raise HTTPException(status_code=404, detail="File not stored in GCS")
+    signed = generate_signed_url(gcs_uri)
+    return RedirectResponse(signed)

@@ -47,6 +47,8 @@ api.interceptors.response.use(
         // Refresh failed, logout user
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('patient');
+        localStorage.removeItem('patientData');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -83,6 +85,11 @@ export const authService = {
   logout: () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('patient');
+    localStorage.removeItem('patientData'); // if you store this
+
+    window.location.href = '/login';
+    return Promise.reject(refreshError);
   },
 
   getCurrentUser: async () => {
@@ -133,6 +140,21 @@ export const fileService = {
   getDownloadUrl: (fileId) => `${API_BASE}/api/patient/file/${fileId}/download`,
   getPrescriptionDownloadUrl: (fileId) =>
     `${API_BASE}/api/patient/prescription-file/${fileId}/download`,
+  downloadFile: async (fileId, filename) => {
+    const response = await api.get(`/api/patient/file/${fileId}/download`, {
+      responseType: 'blob',
+    });
+
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename || 'document');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 
@@ -148,7 +170,7 @@ export const chatService = {
       payload.patient_id = patientContext.patient_id;
     }
 
-     if (patientContext.file_ids && patientContext.file_ids.length > 0) {
+    if (patientContext.file_ids && patientContext.file_ids.length > 0) {
       payload.file_ids = patientContext.file_ids;
     } else if (patientContext.file_id) {
       payload.file_ids = [patientContext.file_id];

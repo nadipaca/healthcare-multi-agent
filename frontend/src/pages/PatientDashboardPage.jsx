@@ -152,9 +152,8 @@ const PatientDashboardPage = () => {
         {/* Summary cards - now select tab */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div
-            className={`card border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow ${
-              selectedTab === 'prescriptions' ? 'ring-2 ring-primary' : ''
-            }`}
+            className={`card border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow ${selectedTab === 'prescriptions' ? 'ring-2 ring-primary' : ''
+              }`}
             onClick={() => setSelectedTab('prescriptions')}
           >
             <div className="flex justify-between items-center">
@@ -166,9 +165,8 @@ const PatientDashboardPage = () => {
             </div>
           </div>
           <div
-            className={`card border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-shadow ${
-              selectedTab === 'appointments' ? 'ring-2 ring-green-500' : ''
-            }`}
+            className={`card border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-shadow ${selectedTab === 'appointments' ? 'ring-2 ring-green-500' : ''
+              }`}
             onClick={() => setSelectedTab('appointments')}
           >
             <div className="flex justify-between items-center">
@@ -180,9 +178,8 @@ const PatientDashboardPage = () => {
             </div>
           </div>
           <div
-            className={`card border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition-shadow ${
-              selectedTab === 'labs' ? 'ring-2 ring-blue-500' : ''
-            }`}
+            className={`card border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition-shadow ${selectedTab === 'labs' ? 'ring-2 ring-blue-500' : ''
+              }`}
             onClick={() => setSelectedTab('labs')}
           >
             <div className="flex justify-between items-center">
@@ -202,19 +199,18 @@ const PatientDashboardPage = () => {
               tab === 'prescriptions'
                 ? 'Prescriptions'
                 : tab === 'appointments'
-                ? 'Appointments'
-                : 'Lab Results';
+                  ? 'Appointments'
+                  : 'Lab Results';
 
             return (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setSelectedTab(tab)}
-                className={`pb-2 border-b-2 -mb-px ${
-                  selectedTab === tab
+                className={`pb-2 border-b-2 -mb-px ${selectedTab === tab
                     ? 'border-primary text-primary font-semibold'
                     : 'border-transparent text-gray-600 hover:text-primary'
-                }`}
+                  }`}
               >
                 {label}
               </button>
@@ -270,12 +266,13 @@ const PatientDashboardPage = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <a
-                          href={fileService.getPrescriptionDownloadUrl(doc.file_id || doc.document_id)}
+                        <button
+                          type="button"
                           className="text-xs text-blue-600 hover:underline"
+                          onClick={() => fileService.downloadFile(doc.document_id, doc.file_name)}
                         >
                           Download
-                        </a>
+                        </button>
                       </div>
                     </li>
                   ))}

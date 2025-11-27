@@ -348,7 +348,7 @@ def update_patient_last_login(patient_id: str):
 
 def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str,
                           file_path: str, file_type: str, file_size: int,
-                          notes: Optional[str] = None) -> Dict:
+                          notes: Optional[str] = None, gcs_uri: Optional[str] = None) -> Dict:
     """Save prescription file metadata to database"""
     import uuid
     
@@ -360,10 +360,10 @@ def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str
     
     cursor.execute('''
         INSERT INTO prescription_files
-        (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes))
-    
+        (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes, gcs_uri)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes, gcs_uri))
+
     conn.commit()
     
     cursor.execute('SELECT * FROM prescription_files WHERE file_id = ?', (file_id,))
@@ -375,7 +375,8 @@ def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str
 def save_lab_result_file(patient_id: str, test_name: str, file_name: str,
                          file_path: str, file_type: str, file_size: int,
                          notes: Optional[str] = None,
-                         extracted_text: Optional[str] = None) -> Dict:
+                         extracted_text: Optional[str] = None,
+                         gcs_uri: Optional[str] = None) -> Dict:
     """Save lab result file metadata, including OCR text if provided"""
     import uuid
 
@@ -388,9 +389,9 @@ def save_lab_result_file(patient_id: str, test_name: str, file_name: str,
     cursor.execute('''
         INSERT INTO medical_documents
         (document_id, patient_id, document_type, file_name, file_path,
-         file_size, category, notes, extracted_text)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (file_id, patient_id, file_type, file_name, file_path, file_size, 'lab_result', notes, extracted_text))
+         file_size, category, notes, extracted_text, gcs_uri)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (file_id, patient_id, file_type, file_name, file_path, file_size, 'lab_result', notes, extracted_text, gcs_uri))
 
     conn.commit()
 
