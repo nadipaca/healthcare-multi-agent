@@ -145,6 +145,12 @@ export const chatService = {
       payload.patient_id = patientContext.patient_id;
     }
 
+     if (patientContext.file_ids && patientContext.file_ids.length > 0) {
+      payload.file_ids = patientContext.file_ids;
+    } else if (patientContext.file_id) {
+      payload.file_ids = [patientContext.file_id];
+    }
+
     const response = await api.post('/api/chat', payload);
     return response.data;
   },

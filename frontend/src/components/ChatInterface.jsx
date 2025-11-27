@@ -126,9 +126,9 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
     if (selectedFile) {
       setUploadingFile(true);
       try {
-        const uploadResponse = await fileService.uploadPrescription(
+        const uploadResponse = await fileService.uploadLabResult(
           selectedFile,
-          null,
+          selectedFile.name, 
           inputValue || 'Uploaded from chat'
         );
         
