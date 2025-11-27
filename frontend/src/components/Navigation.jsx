@@ -4,6 +4,7 @@ import { LogOut, User, MessageSquare, LayoutDashboard } from 'lucide-react';
 
 const Navigation = ({ patient, onLogout }) => {
   const location = useLocation();
+  const isAdmin = patient?.role === 'admin';
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -18,29 +19,38 @@ const Navigation = ({ patient, onLogout }) => {
             <div className="flex-shrink-0 flex items-center">
               <h1 className="text-xl font-bold text-blue-600">🏥 Healthcare Assistant</h1>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-4">
+            <div className="flex items-center sm:ml-6 sm:flex sm:space-x-4">
               <Link
                 to="/"
-                className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                  isActive('/')
+                className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${isActive('/')
                     ? 'bg-blue-50 text-blue-700'
                     : 'text-gray-700 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <MessageSquare size={18} className="mr-2" />
                 Chat
               </Link>
-              <Link
-                to="/dashboard"
-                className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-                  isActive('/dashboard')
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <LayoutDashboard size={18} className="mr-2" />
-                Dashboard
-              </Link>
+              {/* Patient vs admin dashboard link */}
+              {!isAdmin && (
+                <Link
+                  to="/dashboard"
+                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${isActive('/dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  <LayoutDashboard size={18} className="mr-2" />
+                  My Health
+                </Link>
+              )}
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md ${isActive('/admin') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                >
+                  <LayoutDashboard size={18} className="mr-2" />
+                  Analytics
+                </Link>
+              )}
             </div>
           </div>
 

@@ -4,7 +4,8 @@ import PatientAuth from './components/PatientAuth';
 import NewPatientRegistration from './components/NewPatientRegistration';
 import ChatPage from './pages/ChatPage';
 import DashboardPage from './pages/DashboardPage';
-import Navigation from './components/Navigation';
+import Navigation from './components/Navigation';       
+import PatientDashboardPage from './pages/PatientDashboardPage';
 
 function App() {
   const [authenticatedPatient, setAuthenticatedPatient] = useState(null);
@@ -78,7 +79,8 @@ function App() {
               />
             } 
           />
-          <Route path="/dashboard" element={<DashboardPage />}/>
+          <Route path="/dashboard" element={<PatientDashboardPage />} />
+          <Route path="/admin" element={<DashboardPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
