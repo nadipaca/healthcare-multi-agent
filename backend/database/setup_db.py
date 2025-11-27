@@ -109,7 +109,7 @@ def setup_database():
 
      # Medical Documents table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS medical_documents (
+            CREATE TABLE IF NOT EXISTS medical_documents (
             document_id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL,
             document_type TEXT NOT NULL,
@@ -120,6 +120,7 @@ def setup_database():
             uploaded_by TEXT,
             category TEXT,
             notes TEXT,
+            extracted_text TEXT,
             FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
         )
     ''')
