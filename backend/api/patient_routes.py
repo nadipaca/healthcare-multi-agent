@@ -490,14 +490,14 @@ async def upload_lab_result(
         if not validation["valid"]:
             raise HTTPException(status_code=400, detail=validation["error"])
         
-        # Save file
+        # Save file to disk
         file_info = await save_uploaded_file(
             file=file,
             patient_id=patient_id,
             category="lab_results"
         )
 
-        ocr_text = extract_text_from_file(file_info["file_path"])
+        ocr_text = extract_text_from_file(file_info["file_path"], file.content_type)
         
         # Save to database
         document = db_helper.save_lab_result_file(
@@ -507,12 +507,14 @@ async def upload_lab_result(
             file_path=file_info["file_path"],
             file_type=file_info["file_type"],
             file_size=file_info["file_size"],
-            notes=notes
+            notes=notes,
+            extracted_text=ocr_text or None
         )
         
         return {
             "status": "success",
-            "file_id": document["file_id"],
+            "file_id": document["document_id"],
+            "file_name": document["file_name"],
             "message": "Lab result uploaded successfully"
         }
         
