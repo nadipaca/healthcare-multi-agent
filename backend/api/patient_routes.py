@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+﻿from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Literal, List
@@ -8,6 +8,7 @@ import re
 import uuid
 from datetime import datetime
 from api.gcp_ocr import extract_text_from_file
+from fastapi.responses import FileResponse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import db_helper
@@ -615,3 +616,132 @@ async def update_prescription(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/prescription-file/{file_id}/download")
+async def download_prescription_file(
+    file_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    file_info = db_helper.get_prescription_file_by_id(file_id)  # add similar helper
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if file_info["patient_id"] != current_user.get("patient_id") and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if not os.path.exists(file_info["file_path"]):
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(
+        path=file_info["file_path"],
+        media_type=file_info.get("file_type") or "application/octet-stream",
+        filename=file_info.get("file_name") or os.path.basename(file_info["file_path"]),
+    )
+
+@router.post("/appointments")
+async def create_patient_appointment(
+    payload: dict = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Create appointment for current patient"""
+    patient_id = current_user.get("patient_id")
+    try:
+        appt = db_helper.create_appointment(
+            patient_id=patient_id,
+            doctor=payload.get("doctor", "Dr. Smith"),
+            specialty=payload.get("specialty", "General Practitioner"),
+            date=payload["date"],
+            reason=payload.get("reason", ""),
+            location=payload.get("location", "Main Clinic"),
+        )
+        return {"status": "success", "appointment": appt}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/me/medical-history")
+async def add_medical_history_entry(
+    entry: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        patient_id = current_user.get("patient_id")
+        conn = db_helper.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO medical_history (patient_id, condition, diagnosed_date, status, notes)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            patient_id,
+            entry.get("condition"),
+            entry.get("diagnosed_date"),
+            entry.get("status", "active"),
+            entry.get("notes"),
+        ))
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/me/lab-results")
+async def add_lab_result(
+    lab: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        patient_id = current_user.get("patient_id")
+        conn = db_helper.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO lab_results
+            (lab_id, patient_id, test_name, result_value, unit, reference_range, test_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                f"LABMANUAL",
+                patient_id,
+                lab.get("test_name"),
+                lab.get("result_value"),
+                lab.get("unit"),
+                lab.get("reference_range"),
+                lab.get("test_date"),
+                lab.get("status", "completed"),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/file/{file_id}/download")
+async def download_file(
+    file_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download a file the patient has uploaded."""
+    from fastapi import HTTPException
+
+    file_info = db_helper.get_file_by_id(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Authorization: must be owner or admin
+    if (
+        file_info["patient_id"] != current_user.get("patient_id")
+        and current_user.get("role") != "admin"
+    ):
+        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+
+    file_path = file_info["file_path"]
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found on server")
+
+    return FileResponse(
+        path=file_path,
+        media_type="application/octet-stream",
+        filename=file_info.get("file_name") or os.path.basename(file_path),
+    )

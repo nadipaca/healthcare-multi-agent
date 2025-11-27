@@ -130,6 +130,9 @@ export const fileService = {
     const response = await api.delete(`/api/patient/file/${fileId}`);
     return response.data;
   },
+  getDownloadUrl: (fileId) => `${API_BASE}/api/patient/file/${fileId}/download`,
+  getPrescriptionDownloadUrl: (fileId) =>
+    `${API_BASE}/api/patient/prescription-file/${fileId}/download`,
 };
 
 
@@ -191,6 +194,16 @@ export const patientService = {
   addMedicalHistory: async (entry) => {
     // POST to /api/patient/me/medical-history (uses auth from interceptor/localStorage)
     const response = await api.post('/api/patient/me/medical-history', entry);
+    return response.data;
+  },
+
+  createAppointment: async (appointment) => {
+    const response = await api.post('/api/patient/appointments', appointment);
+    return response.data;
+  },
+
+  addLabResult: async (entry) => {
+    const response = await api.post('/api/patient/me/lab-results', entry);
     return response.data;
   },
 

@@ -455,6 +455,22 @@ def get_prescription_by_id(rx_id: str) -> Optional[Dict]:
     conn.close()
     return prescription
 
+def get_prescription_files(patient_id: str) -> List[Dict]:
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    cursor.execute(
+        '''
+        SELECT * FROM prescription_files
+        WHERE patient_id = ?
+        ORDER BY uploaded_at DESC
+        ''',
+        (patient_id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
 def update_prescription(rx_id: str, updates: Dict) -> Dict:
     """Update prescription details"""
     conn = get_db_connection()

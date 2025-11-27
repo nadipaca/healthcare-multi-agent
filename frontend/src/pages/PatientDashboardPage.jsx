@@ -1,22 +1,49 @@
-// frontend/src/pages/PatientDashboardPage.jsx
-import React, { useEffect, useState } from 'react';
-import { patientService } from '../services/api';
+import React, { useEffect, useRef, useState } from 'react';
+import { patientService, fileService } from '../services/api';
 import { Activity, Calendar, FileText, Shield } from 'lucide-react';
+
+const specialties = [
+  'General Practitioner',
+  'Cardiology',
+  'Neurology',
+  'Orthopedics',
+  'Dermatology',
+  'Endocrinology',
+  'Gastroenterology',
+  'Pulmonology',
+  'Psychiatry',
+  'Gynecology',
+];
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const PatientDashboardPage = () => {
   const [data, setData] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formValues, setFormValues] = useState({
+    date: '',
+    time: '',
+    reason: '',
+    specialty: specialties[0],
+  });
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [filesLoading, setFilesLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState('prescriptions'); // NEW
+
+  const patientId = data?.patient?.patient_id;
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await patientService.getCurrentUser(); // /api/patient/me
-        setData(res.data); // backend returns { status, data }
+        const res = await patientService.getCurrentUser();
+        setData(res.data);
       } catch (e) {
-        console.error('Failed to load patient dashboard', e);
         setError('Unable to load your health data.');
       } finally {
         setLoading(false);
@@ -25,10 +52,68 @@ const PatientDashboardPage = () => {
     load();
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    const loadFiles = async () => {
+      if (!patientId) return;
+      try {
+        setFilesLoading(true);
+        const res = await fileService.getPatientFiles(patientId);
+        setFiles(res.files || []);
+      } finally {
+        setFilesLoading(false);
+      }
+    };
+    loadFiles();
+  }, [patientId]);
+
+  // Split files by type
+  const prescriptionDocs = files.filter(
+    (f) => f.category === 'prescription' || f.document_type === 'prescription'
+  );
+  const labDocs = files.filter(
+    (f) => f.category === 'lab_result' || f.document_type === 'lab_result'
+  );
+
+  // Remove medical conditions and manual lab result forms
+  // Remove mhForm, mhLoading, handleMhChange, handleMhSubmit, labForm, labLoading, handleLabChange, handleLabSubmit
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    setFormLoading(true);
+    setFormError(null);
+    try {
+      const payload = {
+        date: `${formValues.date} ${formValues.time}`,
+        reason: formValues.reason,
+        specialty: formValues.specialty,
+      };
+      await patientService.createAppointment(payload);
+      setShowForm(false);
+      setFormValues({
+        date: '',
+        time: '',
+        reason: '',
+        specialty: specialties[0],
+      });
+      // Refresh dashboard data
+      const res = await patientService.getCurrentUser();
+      setData(res.data);
+    } catch (err) {
+      setFormError('Failed to create appointment.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  if (loading || !data) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)] bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -42,10 +127,16 @@ const PatientDashboardPage = () => {
   }
 
   const { patient, prescriptions, appointments, insurance, medical_history, lab_results } = data;
-
-  const nextAppt = appointments && appointments[0];
-  const labsCount = lab_results?.length || 0;
   const rxCount = prescriptions?.length || 0;
+  const apptCount = appointments?.length || 0;
+  const labsCount = lab_results?.length || 0;
+
+  // Filter future appointments
+  const now = new Date();
+  const futureAppointments = (appointments || []).filter((a) => {
+    if (!a.appointment_date) return false;
+    return new Date(a.appointment_date) >= now;
+  });
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gray-50 p-6">
@@ -58,9 +149,14 @@ const PatientDashboardPage = () => {
           </p>
         </div>
 
-        {/* Summary cards */}
+        {/* Summary cards - now select tab */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="card border-l-4 border-primary">
+          <div
+            className={`card border-l-4 border-primary cursor-pointer hover:shadow-md transition-shadow ${
+              selectedTab === 'prescriptions' ? 'ring-2 ring-primary' : ''
+            }`}
+            onClick={() => setSelectedTab('prescriptions')}
+          >
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-xs text-gray-500 uppercase mb-1">Active Prescriptions</p>
@@ -69,20 +165,26 @@ const PatientDashboardPage = () => {
               <Activity className="text-primary" size={32} />
             </div>
           </div>
-          <div className="card border-l-4 border-green-500">
+          <div
+            className={`card border-l-4 border-green-500 cursor-pointer hover:shadow-md transition-shadow ${
+              selectedTab === 'appointments' ? 'ring-2 ring-green-500' : ''
+            }`}
+            onClick={() => setSelectedTab('appointments')}
+          >
             <div className="flex justify-between items-center">
               <div>
-                <p className="text-xs text-gray-500 uppercase mb-1">Upcoming Appointment</p>
-                <p className="text-sm font-semibold">
-                  {nextAppt
-                    ? `${nextAppt.appointment_date.split(' ')[0]} · ${nextAppt.specialty}`
-                    : 'None scheduled'}
-                </p>
+                <p className="text-xs text-gray-500 uppercase mb-1">Appointments</p>
+                <p className="text-2xl font-bold">{apptCount}</p>
               </div>
               <Calendar className="text-green-500" size={32} />
             </div>
           </div>
-          <div className="card border-l-4 border-blue-500">
+          <div
+            className={`card border-l-4 border-blue-500 cursor-pointer hover:shadow-md transition-shadow ${
+              selectedTab === 'labs' ? 'ring-2 ring-blue-500' : ''
+            }`}
+            onClick={() => setSelectedTab('labs')}
+          >
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-xs text-gray-500 uppercase mb-1">Lab Results</p>
@@ -93,73 +195,250 @@ const PatientDashboardPage = () => {
           </div>
         </div>
 
-        {/* Insurance + history */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="card">
-            <div className="flex items-center gap-2 mb-3">
-              <Shield className="text-primary" size={18} />
-              <h2 className="text-sm font-semibold">Insurance</h2>
-            </div>
-            {insurance ? (
-              <div className="text-sm space-y-1">
-                <p className="font-medium">{insurance.provider}</p>
-                <p>Policy: {insurance.policy_number}</p>
-                <p>Status: <span className="font-semibold">{insurance.coverage_status}</span></p>
-                <p>Copay (Primary): ${insurance.copay_primary}</p>
-                <p>Deductible: ${insurance.deductible} (met: ${insurance.deductible_met})</p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No insurance on file.</p>
-            )}
-          </div>
+        {/* Tab bar */}
+        <div className="mt-4 border-b flex gap-4 text-sm">
+          {['prescriptions', 'appointments', 'labs'].map((tab) => {
+            const label =
+              tab === 'prescriptions'
+                ? 'Prescriptions'
+                : tab === 'appointments'
+                ? 'Appointments'
+                : 'Lab Results';
 
-          <div className="card">
-            <h2 className="text-sm font-semibold mb-3">Medical Conditions</h2>
-            {medical_history && medical_history.length > 0 ? (
-              <ul className="text-sm space-y-1 max-h-40 overflow-auto">
-                {medical_history.map((h) => (
-                  <li key={h.history_id}>
-                    <span className="font-medium">{h.condition}</span> &middot; {h.status}
-                    {h.diagnosed_date && ` · since ${h.diagnosed_date}`}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-gray-500">No medical history recorded.</p>
-            )}
-          </div>
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setSelectedTab(tab)}
+                className={`pb-2 border-b-2 -mb-px ${
+                  selectedTab === tab
+                    ? 'border-primary text-primary font-semibold'
+                    : 'border-transparent text-gray-600 hover:text-primary'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Lab results table (compact) */}
-        <div className="card">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-sm font-semibold">Recent Lab Results</h2>
-          </div>
-          {lab_results && lab_results.length > 0 ? (
-            <table className="w-full text-sm">
-              <thead className="text-xs text-gray-500 border-b">
-                <tr>
-                  <th className="text-left py-2">Test</th>
-                  <th className="text-left py-2">Result</th>
-                  <th className="text-left py-2">Reference</th>
-                  <th className="text-left py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lab_results.slice(0, 5).map((lab) => (
-                  <tr key={lab.lab_id} className="border-b last:border-0">
-                    <td className="py-2">{lab.test_name}</td>
-                    <td className="py-2">
-                      {lab.result_value} {lab.unit}
-                    </td>
-                    <td className="py-2">{lab.reference_range}</td>
-                    <td className="py-2">{lab.test_date}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-sm text-gray-500">No lab results yet.</p>
+        {/* Details section per tab */}
+        <div className="mt-4">
+          {/* Prescriptions tab */}
+          {selectedTab === 'prescriptions' && (
+            <div className="card">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold">Prescriptions</h2>
+                {/* Upload prescription */}
+                <label className="btn-primary text-xs px-3 py-1 rounded cursor-pointer">
+                  Upload prescription
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        await fileService.uploadPrescription(file, null, 'Uploaded from dashboard');
+                        const [filesRes, meRes] = await Promise.all([
+                          fileService.getPatientFiles(patientId),
+                          patientService.getCurrentUser(),
+                        ]);
+                        setFiles(filesRes.files || []);
+                        setData(meRes.data);
+                      } catch (err) {
+                        alert('Failed to upload prescription');
+                      } finally {
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {prescriptionDocs.length > 0 ? (
+                <ul className="space-y-2 text-sm">
+                  {prescriptionDocs.map((doc) => (
+                    <li
+                      key={doc.document_id || doc.file_id}
+                      className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded"
+                    >
+                      <div>
+                        <div className="font-medium">{doc.file_name}</div>
+                        <div className="text-xs text-gray-500">
+                          Uploaded {doc.uploaded_at && new Date(doc.uploaded_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={fileService.getPrescriptionDownloadUrl(doc.file_id || doc.document_id)}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500">No prescriptions uploaded yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Appointments tab */}
+          {selectedTab === 'appointments' && (
+            <div className="card">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold">Upcoming Appointments</h2>
+              </div>
+              {futureAppointments.length > 0 ? (
+                <ul className="space-y-2 text-sm mb-4">
+                  {futureAppointments.map((appt) => (
+                    <li
+                      key={appt.appointment_id}
+                      className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded"
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {appt.appointment_date} · {appt.specialty}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {appt.doctor_name} · {appt.location}
+                        </div>
+                      </div>
+                      <span className="text-xs capitalize text-gray-600">{appt.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">No upcoming appointments.</p>
+              )}
+              {/* Booking form */}
+              <form
+                onSubmit={handleFormSubmit}
+                className="mt-2 bg-white p-4 rounded shadow flex flex-col gap-3 max-w-md"
+              >
+                <div>
+                  <label className="block text-sm font-medium mb-1">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={formValues.date}
+                    onChange={handleFormChange}
+                    required
+                    className="border px-3 py-2 rounded w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Time</label>
+                  <input
+                    type="time"
+                    name="time"
+                    value={formValues.time}
+                    onChange={handleFormChange}
+                    required
+                    className="border px-3 py-2 rounded w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Specialty</label>
+                  <select
+                    name="specialty"
+                    value={formValues.specialty}
+                    onChange={handleFormChange}
+                    className="border px-3 py-2 rounded w-full"
+                  >
+                    {specialties.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Reason</label>
+                  <input
+                    type="text"
+                    name="reason"
+                    value={formValues.reason}
+                    onChange={handleFormChange}
+                    required
+                    className="border px-3 py-2 rounded w-full"
+                    placeholder="Reason for visit"
+                  />
+                </div>
+                {formError && (
+                  <div className="text-red-600 text-sm">{formError}</div>
+                )}
+                <button
+                  type="submit"
+                  className="btn-primary px-4 py-2 rounded mt-2"
+                  disabled={formLoading}
+                >
+                  {formLoading ? 'Booking...' : 'Submit'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Lab results tab */}
+          {selectedTab === 'labs' && (
+            <div className="card">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold">Lab Documents</h2>
+                <label className="btn-primary text-xs px-3 py-1 rounded cursor-pointer">
+                  Upload lab result
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        await fileService.uploadLabResult(file, file.name, 'Uploaded from dashboard');
+                        const [filesRes, meRes] = await Promise.all([
+                          fileService.getPatientFiles(patientId),
+                          patientService.getCurrentUser(),
+                        ]);
+                        setFiles(filesRes.files || []);
+                        setData(meRes.data);
+                      } catch (err) {
+                        alert('Failed to upload lab document');
+                      } finally {
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              {labDocs.length > 0 ? (
+                <ul className="space-y-2 text-sm">
+                  {labDocs.map((doc) => (
+                    <li
+                      key={doc.document_id}
+                      className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded"
+                    >
+                      <div>
+                        <div className="font-medium">{doc.file_name}</div>
+                        <div className="text-xs text-gray-500">
+                          Uploaded {doc.uploaded_at && new Date(doc.uploaded_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <a
+                          href={`${API_BASE}/api/patient/file/${doc.document_id}/download`}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500">No lab documents uploaded yet.</p>
+              )}
+            </div>
           )}
         </div>
       </div>
