@@ -374,29 +374,30 @@ def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str
 
 def save_lab_result_file(patient_id: str, test_name: str, file_name: str,
                          file_path: str, file_type: str, file_size: int,
-                         notes: Optional[str] = None) -> Dict:
-    """Save lab result file metadata"""
+                         notes: Optional[str] = None,
+                         extracted_text: Optional[str] = None) -> Dict:
+    """Save lab result file metadata, including OCR text if provided"""
     import uuid
-    
+
     conn = get_db_connection()
     conn.row_factory = dict_factory
     cursor = conn.cursor()
-    
+
     file_id = f"LAB{str(uuid.uuid4())[:8].upper()}"
-    
+
     cursor.execute('''
         INSERT INTO medical_documents
-        (document_id, patient_id, document_type, file_name, file_path, 
-         file_size, category, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (file_id, patient_id, file_type, file_name, file_path, file_size, 'lab_result', notes))
-    
+        (document_id, patient_id, document_type, file_name, file_path,
+         file_size, category, notes, extracted_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (file_id, patient_id, file_type, file_name, file_path, file_size, 'lab_result', notes, extracted_text))
+
     conn.commit()
-    
+
     cursor.execute('SELECT * FROM medical_documents WHERE document_id = ?', (file_id,))
     file_record = cursor.fetchone()
     conn.close()
-    
+
     return file_record
 
 def get_patient_files(patient_id: str, file_type: Optional[str] = None) -> List[Dict]:

@@ -7,6 +7,7 @@ import os
 import re
 import uuid
 from datetime import datetime
+from api.gcp_ocr import extract_text_from_file
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import db_helper
@@ -495,6 +496,8 @@ async def upload_lab_result(
             patient_id=patient_id,
             category="lab_results"
         )
+
+        ocr_text = extract_text_from_file(file_info["file_path"])
         
         # Save to database
         document = db_helper.save_lab_result_file(

@@ -32,7 +32,7 @@ from api.testing_routes import router as testing_router
 from api.patient_routes import router as patient_router
 from api.chat_history_routes import router as chat_history_router
 
-APP_NAME = "healthcare-multi-agent"
+APP_NAME = "agents"
 USER_ID = "demo_user"
 
 app = FastAPI(title="Healthcare Multi-Agent System")
@@ -141,39 +141,58 @@ async def chat(request: Request, payload: ChatRequest):
     - Streams events and assembles text responses.
     - Detects 'NEEDS_HUMAN_REVIEW: true' marker for HITL.
     """
-    session_id = payload.session_id or str(uuid.uuid4())
-    patient_id = payload.patient_id  # Get patient_id from payload
-    
-    # Apply rate limiting
-    await rate_limiter.check_rate_limit(session_id)
+    patient_id = payload.patient_id
+    file_ids = payload.file_ids or []
+    session_id = payload.session_id
 
-    # Start timing for analytics
-    start_time = time.time()
-
-    # Ensure session exists
-    await ensure_session(session_id)
-
-    # Only create/get database session if patient_id is provided
+    # Align chat session ID with database chat session when a patient is known
     if patient_id:
         try:
+            # This will return an existing active session for the patient
+            # or create a new one if needed.
             canonical_session_id = db_helper.get_or_create_session(patient_id, session_id)
-            session_id = canonical_session_id or session_id
-        except Exception as e:
+            session_id = canonical_session_id
+        except Exception:
             import traceback
             traceback.print_exc()
-        
+            # Fallback to a random session if DB lookup fails
+            session_id = session_id or str(uuid.uuid4())
+
+        # Persist the incoming user message against the DB chat session
         try:
             db_helper.save_chat_message(session_id=session_id, role='user', content=payload.message)
         except Exception:
             import traceback
             traceback.print_exc()
+    else:
+        # No patient context – use provided session_id or generate a new one
+        session_id = session_id or str(uuid.uuid4())
+
+    # Apply rate limiting using the final session_id
+    await rate_limiter.check_rate_limit(session_id)
+
+    # Start timing for analytics
+    start_time = time.time()
+
+    # Ensure an ADK session exists for this (app, user, session_id)
+    await ensure_session(session_id)
 
     runner = get_runner()
 
-    # Wrap user text
+    # Fetch OCR text for any referenced files
+    ocr_context = ""
+    if file_ids:
+        for fid in file_ids:
+            doc = db_helper.get_file_by_id(fid)
+            if doc and doc.get("extracted_text"):
+                ocr_context += f"\n--- File: {doc.get('file_name')} ---\n{doc['extracted_text']}\n"
+
+    # Compose message for agent
+    full_message = f"{ocr_context}\nUser message: {payload.message}" if ocr_context else payload.message
+
     user_message: Content = Content(
         role="user",
-        parts=[Part(text=payload.message)],
+        parts=[Part(text=full_message)],
     )
 
     messages: List[str] = []
@@ -181,8 +200,8 @@ async def chat(request: Request, payload: ChatRequest):
     agent_trace: List[str] = []
 
     async for event in runner.run_async(
-        user_id=USER_ID,
         session_id=session_id,
+        user_id=USER_ID,
         new_message=user_message,
     ):
         # Collect text from events
