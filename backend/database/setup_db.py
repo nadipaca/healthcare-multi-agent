@@ -5,6 +5,9 @@ Creates tables and populates with sample patient data
 import sqlite3
 from datetime import datetime, timedelta
 import os
+import sys
+# Ensure backend/ is on sys.path so "api" can be imported
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Create database directory if it doesn't exist
 os.makedirs(os.path.dirname(__file__), exist_ok=True)

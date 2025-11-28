@@ -129,7 +129,7 @@ const PatientDashboardPage = () => {
   const { patient, prescriptions, appointments, insurance, medical_history, lab_results } = data;
   const rxCount = prescriptions?.length || 0;
   const apptCount = appointments?.length || 0;
-  const labsCount = lab_results?.length || 0;
+  const labsCount = labDocs.length || 0;
 
   // Filter future appointments
   const now = new Date();
@@ -208,8 +208,8 @@ const PatientDashboardPage = () => {
                 type="button"
                 onClick={() => setSelectedTab(tab)}
                 className={`pb-2 border-b-2 -mb-px ${selectedTab === tab
-                    ? 'border-primary text-primary font-semibold'
-                    : 'border-transparent text-gray-600 hover:text-primary'
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-gray-600 hover:text-primary'
                   }`}
               >
                 {label}
@@ -422,12 +422,13 @@ const PatientDashboardPage = () => {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <a
-                          href={`${API_BASE}/api/patient/file/${doc.document_id}/download`}
+                        <button
+                          type="button"
                           className="text-xs text-blue-600 hover:underline"
+                          onClick={() => fileService.downloadFile(doc.document_id, doc.file_name)}
                         >
                           Download
-                        </a>
+                        </button>
                       </div>
                     </li>
                   ))}

@@ -490,9 +490,22 @@ async def upload_lab_result(
             raise HTTPException(status_code=400, detail=validation["error"])
         
         # Save file to disk
-        file_info = await save_uploaded_file(file=file, patient_id=patient_id, category="lab_results")
+        file_info = await save_uploaded_file(
+            file=file,
+            patient_id=patient_id,
+            category="lab_results"
+        )
+
+        # Run OCR to extract text from the uploaded document
+        ocr_text = extract_text_from_file(file_info["file_path"], file.content_type)
+
+        # Upload the file to GCS for durable storage
         gcs_path = f"labs/{patient_id}/{file_info['stored_name']}"
-        gcs_uri = upload_file_to_gcs(file_info["file_path"], gcs_path, content_type=file_info["file_type"])
+        gcs_uri = upload_file_to_gcs(
+            file_info["file_path"],
+            gcs_path,
+            content_type=file_info["file_type"]
+        )
         document = db_helper.save_lab_result_file(
             patient_id=patient_id,
             test_name=test_name,
@@ -512,9 +525,9 @@ async def upload_lab_result(
             "message": "Lab result uploaded successfully"
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()   # <- keep this
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/files/{patient_id}")
