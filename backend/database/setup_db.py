@@ -49,7 +49,7 @@ def setup_database():
     
     # Create Prescriptions table
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS prescriptions (
+        CREATE TABLE IF NOT EXISTS prescription_files (
             file_id TEXT PRIMARY KEY,
             patient_id TEXT NOT NULL,
             rx_id TEXT,
@@ -58,8 +58,8 @@ def setup_database():
             file_type TEXT,
             file_size INTEGER,
             uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            uploaded_by TEXT,
             notes TEXT,
+            gcs_uri TEXT,
             FOREIGN KEY (patient_id) REFERENCES patients (patient_id),
             FOREIGN KEY (rx_id) REFERENCES prescriptions (rx_id)
         )

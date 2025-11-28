@@ -32,7 +32,8 @@ const PatientDashboardPage = () => {
   const [error, setError] = useState(null);
   const [files, setFiles] = useState([]);
   const [filesLoading, setFilesLoading] = useState(true);
-  const [selectedTab, setSelectedTab] = useState('prescriptions'); // NEW
+  const [selectedTab, setSelectedTab] = useState('prescriptions');
+  const [prescripDocs, setPrescripDocs] = useState([]);
 
   const patientId = data?.patient?.patient_id;
 
@@ -110,6 +111,21 @@ const PatientDashboardPage = () => {
     }
   };
 
+  useEffect(() => {
+    const loadPrescriptionDocs = async () => {
+      if (!patientId) return;
+      try {
+        const res = await fileService.getPrescriptionFiles(patientId);
+        setPrescripDocs(res.files || []);
+      } catch (e) {
+        console.error('Failed to load prescription docs', e);
+      }
+    };
+
+    loadPrescriptionDocs();
+  }, [patientId]);
+
+
   if (loading || !data) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-64px)] bg-gray-50">
@@ -127,7 +143,7 @@ const PatientDashboardPage = () => {
   }
 
   const { patient, prescriptions, appointments, insurance, medical_history, lab_results } = data;
-  const rxCount = prescriptions?.length || 0;
+  const rxCount = prescripDocs?.length || 0;
   const apptCount = appointments?.length || 0;
   const labsCount = labDocs.length || 0;
 
@@ -225,7 +241,6 @@ const PatientDashboardPage = () => {
             <div className="card">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-sm font-semibold">Prescriptions</h2>
-                {/* Upload prescription */}
                 <label className="btn-primary text-xs px-3 py-1 rounded cursor-pointer">
                   Upload prescription
                   <input
@@ -237,11 +252,11 @@ const PatientDashboardPage = () => {
                       if (!file) return;
                       try {
                         await fileService.uploadPrescription(file, null, 'Uploaded from dashboard');
-                        const [filesRes, meRes] = await Promise.all([
-                          fileService.getPatientFiles(patientId),
+                        const [presRes, meRes] = await Promise.all([
+                          fileService.getPrescriptionFiles(patientId),
                           patientService.getCurrentUser(),
                         ]);
-                        setFiles(filesRes.files || []);
+                        setPrescriptionDocs(presRes.files || []);
                         setData(meRes.data);
                       } catch (err) {
                         alert('Failed to upload prescription');
@@ -252,11 +267,12 @@ const PatientDashboardPage = () => {
                   />
                 </label>
               </div>
-              {prescriptionDocs.length > 0 ? (
+
+              {prescripDocs.length > 0 ? (
                 <ul className="space-y-2 text-sm">
-                  {prescriptionDocs.map((doc) => (
+                  {prescripDocs.map((doc) => (
                     <li
-                      key={doc.document_id || doc.file_id}
+                      key={doc.file_id}
                       className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded"
                     >
                       <div>
@@ -265,15 +281,13 @@ const PatientDashboardPage = () => {
                           Uploaded {doc.uploaded_at && new Date(doc.uploaded_at).toLocaleString()}
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="text-xs text-blue-600 hover:underline"
-                          onClick={() => fileService.downloadFile(doc.document_id, doc.file_name)}
-                        >
-                          Download
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="text-xs text-blue-600 hover:underline"
+                        onClick={() => fileService.downloadPrescriptionFile(doc.file_id, doc.file_name)}
+                      >
+                        Download
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -282,6 +296,7 @@ const PatientDashboardPage = () => {
               )}
             </div>
           )}
+
 
           {/* Appointments tab */}
           {selectedTab === 'appointments' && (

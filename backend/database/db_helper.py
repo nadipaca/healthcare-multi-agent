@@ -346,18 +346,57 @@ def update_patient_last_login(patient_id: str):
     conn.commit()
     conn.close()
 
-def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str,
-                          file_path: str, file_type: str, file_size: int,
-                          notes: Optional[str] = None, gcs_uri: Optional[str] = None) -> Dict:
-    """Save prescription file metadata to database"""
-    import uuid
-    
+def get_prescription_files(patient_id: str) -> List[Dict]:
+    """Get all prescription documents for a patient"""
     conn = get_db_connection()
     conn.row_factory = dict_factory
     cursor = conn.cursor()
-    
+    cursor.execute(
+        '''
+        SELECT * FROM prescription_files
+        WHERE patient_id = ?
+        ORDER BY uploaded_at DESC
+        ''',
+        (patient_id,),
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def get_prescription_file_by_id(file_id: str) -> Optional[Dict]:
+    """Get a single prescription document by file_id"""
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT * FROM prescription_files WHERE file_id = ?',
+        (file_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+def save_prescription_file(
+    patient_id: str,
+    rx_id: Optional[str],
+    file_name: str,
+    file_path: str,
+    file_type: str,
+    file_size: int,
+    notes: Optional[str] = None,
+    gcs_uri: Optional[str] = None,
+) -> Dict:
+    """Save prescription file metadata to database"""
+    import uuid
+
+    conn = get_db_connection()
+    conn.row_factory = dict_factory
+    cursor = conn.cursor()
+
     file_id = f"FILE{str(uuid.uuid4())[:8].upper()}"
-    
+
     cursor.execute('''
         INSERT INTO prescription_files
         (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes, gcs_uri)
@@ -365,11 +404,10 @@ def save_prescription_file(patient_id: str, rx_id: Optional[str], file_name: str
     ''', (file_id, patient_id, rx_id, file_name, file_path, file_type, file_size, notes, gcs_uri))
 
     conn.commit()
-    
     cursor.execute('SELECT * FROM prescription_files WHERE file_id = ?', (file_id,))
     file_record = cursor.fetchone()
     conn.close()
-    
+
     return file_record
 
 def save_lab_result_file(patient_id: str, test_name: str, file_name: str,

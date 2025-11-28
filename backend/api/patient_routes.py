@@ -9,7 +9,7 @@ import uuid
 from datetime import datetime
 from api.gcp_ocr import extract_text_from_file
 from fastapi.responses import FileResponse, RedirectResponse
-from api.gcs_storage import upload_file_to_gcs
+from api.gcs_storage import upload_file_to_gcs, generate_signed_url
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import db_helper
@@ -58,7 +58,7 @@ class FileUploadResponse(BaseModel):
     file_id: str
     file_name: str
     file_type: str
-    uploaded_at: str
+    uploaded_at: Optional[str] = None
     message: str
 
 def validate_password_strength(password: str) -> tuple[bool, str]:
@@ -426,6 +426,18 @@ async def update_patient_record(
 
 # ============= File Upload Endpoints =============
 
+@router.get("/prescription-files/{patient_id}")
+async def get_prescription_files(
+    patient_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if current_user.get("patient_id") != patient_id and current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    files = db_helper.get_prescription_files(patient_id)
+    return {"status": "success", "files": files}
+
+
 @router.post("/upload/prescription", response_model=FileUploadResponse)
 async def upload_prescription(
     file: UploadFile = File(...),
@@ -463,8 +475,8 @@ async def upload_prescription(
         return FileUploadResponse(
             file_id=document["file_id"],
             file_name=document["file_name"],
-            file_type=document["file_type"],
-            uploaded_at=document["uploaded_at"],
+            file_type=document.get("file_type", ""),
+            uploaded_at=document.get("uploaded_at"),
             message="Prescription uploaded successfully"
         )
         
@@ -628,21 +640,19 @@ async def download_prescription_file(
     file_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    file_info = db_helper.get_prescription_file_by_id(file_id)  # add similar helper
-    if not file_info:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    if file_info["patient_id"] != current_user.get("patient_id") and current_user.get("role") != "admin":
+    if (
+        file_info["patient_id"] != current_user.get("patient_id")
+        and current_user.get("role") != "admin"
+    ):
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    if not os.path.exists(file_info["file_path"]):
-        raise HTTPException(status_code=404, detail="File not found on server")
+    gcs_uri = file_info.get("gcs_uri")
+    if not gcs_uri:
+        raise HTTPException(status_code=404, detail="File not stored in GCS")
 
-    return FileResponse(
-        path=file_info["file_path"],
-        media_type=file_info.get("file_type") or "application/octet-stream",
-        filename=file_info.get("file_name") or os.path.basename(file_info["file_path"]),
-    )
+    signed = generate_signed_url(gcs_uri)
+    # match lab behaviour: return URL JSON
+    return {"url": signed}
 
 @router.post("/appointments")
 async def create_patient_appointment(
@@ -728,13 +738,16 @@ async def download_file(file_id: str, current_user: dict = Depends(get_current_u
     file_info = db_helper.get_file_by_id(file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
+
     if (
         file_info["patient_id"] != current_user.get("patient_id")
         and current_user.get("role") != "admin"
     ):
         raise HTTPException(status_code=403, detail="Not authorized")
+
     gcs_uri = file_info.get("gcs_uri")
     if not gcs_uri:
         raise HTTPException(status_code=404, detail="File not stored in GCS")
+
     signed = generate_signed_url(gcs_uri)
-    return RedirectResponse(signed)
+    return {"url": signed}

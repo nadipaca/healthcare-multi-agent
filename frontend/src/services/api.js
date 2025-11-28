@@ -141,19 +141,31 @@ export const fileService = {
   getPrescriptionDownloadUrl: (fileId) =>
     `${API_BASE}/api/patient/prescription-file/${fileId}/download`,
   downloadFile: async (fileId, filename) => {
-    const response = await api.get(`/api/patient/file/${fileId}/download`, {
-      responseType: 'blob',
-    });
+    const res = await api.get(`/api/patient/file/${fileId}/download`);
+    const signedUrl = res.data.url;
 
-    const blob = new Blob([response.data]);
-    const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
+    link.href = signedUrl;
     link.setAttribute('download', filename || 'document');
     document.body.appendChild(link);
     link.click();
     link.remove();
-    window.URL.revokeObjectURL(url);
+  },
+  getPrescriptionFiles: async (patientId) => {
+    const response = await api.get(`/api/patient/prescription-files/${patientId}`);
+    return response.data;
+  },
+
+  downloadPrescriptionFile: async (fileId, filename) => {
+    const res = await api.get(`/api/patient/prescription-file/${fileId}/download`);
+    const signedUrl = res.data.url;
+
+    const link = document.createElement('a');
+    link.href = signedUrl;
+    link.setAttribute('download', filename || 'prescription');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   },
 };
 
