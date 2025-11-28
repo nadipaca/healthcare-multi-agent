@@ -3,9 +3,9 @@ import { Send, RefreshCw, User, Bot, AlertTriangle, Loader2, Paperclip, X } from
 import { useChat } from '../hooks/useChat';
 import { fileService } from '../services/api';
 
-const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessionId, 
-    initialMessages = []
-  }) => {
+const ChatInterface = ({ selectedPatient, patientData, sessionId: externalSessionId,
+  initialMessages = [], analyzeFileId
+}) => {
   const {
     sessionId: hookSessionId,
     messages,
@@ -24,7 +24,7 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
   const messagesEndRef = useRef(null);
   const [proactiveActions, setProactiveActions] = useState([]);
   const [currentFlow, setCurrentFlow] = useState(null);
-   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -45,6 +45,17 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
   }, [initialMessages, setMessages]);
 
   useEffect(() => {
+    if (analyzeFileId && selectedPatient?.patient_id) {
+      sendMessage(
+        "Please review this lab result and tell me the key findings and precautions.",
+        { file_ids: [analyzeFileId], patient_id: selectedPatient.patient_id }
+      );
+    }
+    // Only run once per analyzeFileId
+    // eslint-disable-next-line
+  }, [analyzeFileId, selectedPatient?.patient_id]);
+
+  useEffect(() => {
     if (!externalSessionId) {
       // create a new chat session inside the hook and clear messages
       newSession();
@@ -57,12 +68,12 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
       const lastMessage = messages[messages.length - 1];
       if (lastMessage.role === 'assistant') {
         const content = lastMessage.content.toLowerCase();
-        
+
         // Detect flow state and suggest next actions
         if (content.includes("immediate relief options") || content.includes("recommended next step")) {
           setProactiveActions([
             "✅ Got it, let's schedule the appointment",
-            "ℹ️ Tell me more about treatment options", 
+            "ℹ️ Tell me more about treatment options",
             "📞 I need to call someone first",
             "⏰ Check my calendar availability"
           ]);
@@ -116,28 +127,28 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
     }
   };
 
-   const handleSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if ((!inputValue.trim() && !selectedFile) || isLoading) return;
-    
+
     setProactiveActions([]);
-    
+
     // If there's a file, upload it first
     if (selectedFile) {
       setUploadingFile(true);
       try {
         const uploadResponse = await fileService.uploadLabResult(
           selectedFile,
-          selectedFile.name, 
+          selectedFile.name,
           inputValue || 'Uploaded from chat'
         );
-        
+
         // Send message about the uploaded file
         await sendMessage(
           inputValue || `I've uploaded a file: ${selectedFile.name}`,
           { file_id: uploadResponse.file_id }
         );
-        
+
         handleRemoveFile();
       } catch (error) {
         alert('File upload failed: ' + (error.response?.data?.detail || error.message));
@@ -148,7 +159,7 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
       // Just send text message
       await sendMessage(inputValue);
     }
-    
+
     setInputValue('');
   };
 
@@ -248,15 +259,14 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
           {messages.map((msg, idx) => {
             const isUser = msg.role === 'user';
             const isSystem = msg.role === 'system';
-            
+
             return (
               <div key={idx} className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
                 <div className={`flex max-w-[70%] ${isUser ? 'flex-row-reverse' : 'flex-row'} gap-2`}>
                   {/* Avatar */}
                   {!isSystem && (
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                      isUser ? 'bg-primary' : 'bg-gray-200'
-                    }`}>
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isUser ? 'bg-primary' : 'bg-gray-200'
+                      }`}>
                       {isUser ? (
                         <User size={18} className="text-white" />
                       ) : (
@@ -264,30 +274,28 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
                       )}
                     </div>
                   )}
-                  
+
                   {/* Message Content */}
-                  <div className={`rounded-lg px-4 py-2 ${
-                    isUser 
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white' 
-                      : isSystem
+                  <div className={`rounded-lg px-4 py-2 ${isUser
+                    ? 'bg-gradient-to-r from-primary to-secondary text-white'
+                    : isSystem
                       ? 'bg-red-100 text-red-700 border border-red-300'
                       : 'bg-white shadow-md'
-                  }`}>
+                    }`}>
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                    
+
                     {needsHumanReview && !isUser && !isSystem && (
                       <div className="mt-2 flex items-center gap-2 text-orange-600 text-xs">
                         <AlertTriangle size={14} />
                         <span>Flagged for human review</span>
                       </div>
                     )}
-                    
-                    <div className={`text-xs mt-1 ${
-                      isUser ? 'text-white/70' : isSystem ? 'text-red-600' : 'text-gray-500'
-                    }`}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
+
+                    <div className={`text-xs mt-1 ${isUser ? 'text-white/70' : isSystem ? 'text-red-600' : 'text-gray-500'
+                      }`}>
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
                       })}
                     </div>
                   </div>
@@ -311,7 +319,7 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
       </div>
 
       {/* Input Area - keeping existing code */}
-   <div className="border-t bg-white p-4 shadow-lg flex-shrink-0">
+      <div className="border-t bg-white p-4 shadow-lg flex-shrink-0">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           {/* File Preview */}
           {selectedFile && (
@@ -356,8 +364,8 @@ const ChatInterface = ({ selectedPatient, patientData,  sessionId: externalSessi
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder={
-                selectedFile 
-                  ? "Add a note about this file (optional)..." 
+                selectedFile
+                  ? "Add a note about this file (optional)..."
                   : "Type your message or attach a file..."
               }
               disabled={isLoading || uploadingFile}

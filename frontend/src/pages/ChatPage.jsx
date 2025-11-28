@@ -3,11 +3,14 @@ import ChatInterface from '../components/ChatInterface';
 import ChatHistorySidebar from '../components/ChatHistorySidebar';
 import { Menu, X } from 'lucide-react';
 import api from '../services/api';
+import { useLocation } from 'react-router-dom';
 
 const ChatPage = ({ patient, patientData, onDataUpdate }) => {
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [loadedMessages, setLoadedMessages] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Closed by default
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  const location = useLocation();
+  const analyzeFileId = location.state?.analyzeFileId;
 
   const handleSelectSession = async (sessionId) => {
     try {
@@ -116,6 +119,7 @@ const ChatPage = ({ patient, patientData, onDataUpdate }) => {
             onDataUpdate={onDataUpdate}
             sessionId={currentSessionId}
             initialMessages={loadedMessages}
+            analyzeFileId={analyzeFileId}
           />
         </div>
       </div>

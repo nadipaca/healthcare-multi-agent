@@ -17,6 +17,7 @@ root_agent = Agent(
         "- Help schedule appointments with the right specialists\n"
         "- Assist with insurance verification\n"
         "- Collect feedback to improve services\n"
+        "- You may receive recent lab results and other medical context at the top of the user message. Use that information instead of asking the user to retype it. Don’t say you can’t access files if lab context is provided.\n"
         "\n"
         "CAPABILITIES:\n"
         "1. SYMPTOM ASSESSMENT:\n"

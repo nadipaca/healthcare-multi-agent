@@ -640,6 +640,10 @@ async def download_prescription_file(
     file_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    file_info = db_helper.get_prescription_file_by_id(file_id)
+    if not file_info:
+        raise HTTPException(status_code=404, detail="File not found")
+
     if (
         file_info["patient_id"] != current_user.get("patient_id")
         and current_user.get("role") != "admin"
@@ -651,8 +655,8 @@ async def download_prescription_file(
         raise HTTPException(status_code=404, detail="File not stored in GCS")
 
     signed = generate_signed_url(gcs_uri)
-    # match lab behaviour: return URL JSON
-    return {"url": signed}
+    return {"url": signed}  # JSON, no redirect / FileResponse
+
 
 @router.post("/appointments")
 async def create_patient_appointment(

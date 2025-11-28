@@ -4,6 +4,7 @@ import uuid
 import time
 from typing import List, Optional
 from dotenv import load_dotenv
+from database import db_helper
 
 # Load environment variables
 load_dotenv()
@@ -179,7 +180,19 @@ async def chat(request: Request, payload: ChatRequest):
 
     runner = get_runner()
 
-    # Fetch OCR text for any referenced files
+    lab_context = ""
+    if patient_id and any(kw in payload.message.lower() for kw in ["lab", "test result", "blood work"]):
+        structured_labs = db_helper.get_lab_results(patient_id)[:3]  # last 3
+        lab_lines = []
+        for lab in structured_labs:
+            lab_lines.append(
+                f"{lab['test_date']}: {lab['test_name']} = {lab['result_value']} {lab['unit']} (ref: {lab['reference_range']})"
+            )
+        if lab_lines:
+            lab_context = "Recent lab results for this patient:\n" + "\n".join(lab_lines) + "\n\n"
+
+
+    # existing ocr_context from medical_documents
     ocr_context = ""
     if file_ids:
         for fid in file_ids:
@@ -187,9 +200,10 @@ async def chat(request: Request, payload: ChatRequest):
             if doc and doc.get("extracted_text"):
                 ocr_context += f"\n--- File: {doc.get('file_name')} ---\n{doc['extracted_text']}\n"
 
-    # Compose message for agent
-    full_message = f"{ocr_context}\nUser message: {payload.message}" if ocr_context else payload.message
+    context = lab_context + ocr_context
+    full_message = f"{context}User message: {payload.message}" if context else payload.message
 
+    # ...use full_message in agent invocation...
     user_message: Content = Content(
         role="user",
         parts=[Part(text=full_message)],

@@ -161,7 +161,7 @@ export const fileService = {
     const signedUrl = res.data.url;
 
     const link = document.createElement('a');
-    link.href = signedUrl;
+    link.href = signedUrl;                  // direct browser navigation to GCS
     link.setAttribute('download', filename || 'prescription');
     document.body.appendChild(link);
     link.click();
