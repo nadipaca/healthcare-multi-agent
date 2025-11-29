@@ -24,7 +24,7 @@ This project shows how **agents** can coordinate across these touchpoints to pro
 
 ## 📹 Video Tutorial
 
-<video src="./docs/assets/demo.mp4" width="800" alt="Video Tutorial">
+[▶️ Watch the demo video](./docs/assets/demo.mp4)
 
 ## 2. Core User Stories & Agent Roles
 
