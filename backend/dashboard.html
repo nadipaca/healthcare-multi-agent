@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Multi-Agent Analytics Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f7fa;
+            color: #2c3e50;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .controls label {
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        
+        .controls select, .controls button {
+            padding: 8px 15px;
+            border: 2px solid #e0e6ed;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .controls button {
+            background: #667eea;
+            color: white;
+            border: none;
+            margin-left: 10px;
+            transition: background 0.3s;
+        }
+        
+        .controls button:hover {
+            background: #5568d3;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .card-title {
+            font-size: 0.9em;
+            text-transform: uppercase;
+            color: #8492a6;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .card-value {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .card-subtitle {
+            font-size: 0.85em;
+            color: #8492a6;
+        }
+        
+        .card.primary { border-left: 4px solid #667eea; }
+        .card.success { border-left: 4px solid #10b981; }
+        .card.warning { border-left: 4px solid #f59e0b; }
+        .card.danger { border-left: 4px solid #ef4444; }
+        
+        .section {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e6ed;
+        }
+        
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #64748b;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        tr:hover {
+            background: #f8fafc;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-warning { background: #fed7aa; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        
+        .chart-bar {
+            background: #e0e7ff;
+            height: 30px;
+            border-radius: 5px;
+            position: relative;
+            margin: 8px 0;
+        }
+        
+        .chart-bar-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            color: white;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: width 0.5s ease;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #8492a6;
+        }
+        
+        .error {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ef4444;
+        }
+        
+        .refresh-indicator {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 0.85em;
+            color: #8492a6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏥 Healthcare Multi-Agent Analytics</h1>
+            <p class="subtitle">Real-time monitoring and performance metrics</p>
+        </header>
+        
+        <div class="controls">
+            <label for="timeRange">Time Range:</label>
+            <select id="timeRange" onchange="loadDashboard()">
+                <option value="1">Last Hour</option>
+                <option value="6">Last 6 Hours</option>
+                <option value="24" selected>Last 24 Hours</option>
+                <option value="168">Last 7 Days</option>
+            </select>
+            <button onclick="loadDashboard()">🔄 Refresh</button>
+            <span id="lastUpdated" class="refresh-indicator"></span>
+        </div>
+        
+        <div id="overview" class="grid">
+            <!-- Stats cards will be inserted here -->
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Agent Usage & Performance</h2>
+            <div id="agentMetrics"></div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Top Active Sessions</h2>
+            <div id="topSessions"></div>
+        </div>
+        
+        <div class="section">
+            <h2 class="section-title">Recent HITL Flags 🚩</h2>
+            <div id="hitlFlags"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        
+        async function loadDashboard() {
+            const hours = document.getElementById('timeRange').value;
+            
+            try {
+                document.getElementById('overview').innerHTML = '<div class="loading">Loading...</div>';
+                
+                const response = await fetch(`${API_BASE}/api/analytics/dashboard?hours=${hours}`);
+                const data = await response.json();
+                
+                renderOverview(data.overview);
+                renderAgentMetrics(data.agent_usage, data.agent_performance);
+                renderTopSessions(data.top_sessions);
+                renderHitlFlags(data.recent_hitl_flags);
+                
+                document.getElementById('lastUpdated').textContent = 
+                    `Updated: ${new Date().toLocaleTimeString()}`;
+                
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                document.getElementById('overview').innerHTML = 
+                    '<div class="error">Failed to load dashboard. Make sure the API server is running.</div>';
+            }
+        }
+        
+        function renderOverview(overview) {
+            const html = `
+                <div class="card primary">
+                    <div class="card-title">Total Interactions</div>
+                    <div class="card-value">${overview.total_interactions}</div>
+                    <div class="card-subtitle">Last ${overview.time_period_hours}h</div>
+                </div>
+                <div class="card success">
+                    <div class="card-title">Active Sessions</div>
+                    <div class="card-value">${overview.active_sessions}</div>
+                    <div class="card-subtitle">Unique users</div>
+                </div>
+                <div class="card warning">
+                    <div class="card-title">HITL Flags</div>
+                    <div class="card-value">${overview.hitl_flags}</div>
+                    <div class="card-subtitle">Requiring human review</div>
+                </div>
+                <div class="card primary">
+                    <div class="card-title">Avg Session Duration</div>
+                    <div class="card-value">${Math.round(overview.avg_session_duration_seconds)}s</div>
+                    <div class="card-subtitle">Per session</div>
+                </div>
+            `;
+            document.getElementById('overview').innerHTML = html;
+        }
+        
+        function renderAgentMetrics(usage, performance) {
+            const maxCalls = Math.max(...Object.values(usage));
+            
+            let html = '';
+            for (const [agent, calls] of Object.entries(usage)) {
+                const perf = performance[agent] || {};
+                const percentage = (calls / maxCalls) * 100;
+                
+                html += `
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <strong>${agent}</strong>
+                            <span>${calls} calls • ${perf.avg_duration_ms || 0}ms avg • ⭐ ${perf.avg_rating || 'N/A'}</span>
+                        </div>
+                        <div class="chart-bar">
+                            <div class="chart-bar-fill" style="width: ${percentage}%;">
+                                ${calls} interactions
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('agentMetrics').innerHTML = html || '<p>No data available</p>';
+        }
+        
+        function renderTopSessions(sessions) {
+            if (!sessions || sessions.length === 0) {
+                document.getElementById('topSessions').innerHTML = '<p>No sessions yet</p>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Session ID</th>
+                            <th>Interactions</th>
+                            <th>Agents Used</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            sessions.forEach(session => {
+                html += `
+                    <tr>
+                        <td><code>${session.session_id.substring(0, 8)}...</code></td>
+                        <td><strong>${session.total_interactions}</strong></td>
+                        <td>${session.agents_used}</td>
+                        <td>${session.duration_minutes} min</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('topSessions').innerHTML = html;
+        }
+        
+        function renderHitlFlags(flags) {
+            if (!flags || flags.length === 0) {
+                document.getElementById('hitlFlags').innerHTML = '<p>No recent HITL flags ✅</p>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Agent</th>
+                            <th>Session ID</th>
+                            <th>Message Preview</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            flags.forEach(flag => {
+                const date = new Date(flag.timestamp);
+                html += `
+                    <tr>
+                        <td>${date.toLocaleString()}</td>
+                        <td><span class="badge badge-warning">${flag.agent}</span></td>
+                        <td><code>${flag.session_id.substring(0, 8)}...</code></td>
+                        <td>${flag.message_preview}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('hitlFlags').innerHTML = html;
+        }
+        
+        // Load dashboard on page load
+        loadDashboard();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>

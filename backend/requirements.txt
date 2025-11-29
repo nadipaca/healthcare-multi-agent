@@ -1,6 +1,8 @@
 google-adk>=1.14.0
 google-genai>=1.0.0
 google-cloud-aiplatform>=1.70.0
+google-cloud-documentai>=2.28.0
+google-cloud-storage>=2.0.0
 
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
@@ -9,6 +11,9 @@ python-dotenv>=1.0.1
 
 PyJWT>=2.9.0
 cryptography>=42.0.0
+bcrypt>=5.0.0
+python-multipart>=0.0.20
+pydantic[email]>=2.8.0
 
 fastmcp>=2.10.0
 mcp[cli]>=1.8.0

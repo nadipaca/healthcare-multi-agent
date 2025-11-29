@@ -73,6 +73,24 @@ logs/
 *.sqlite
 *.sqlite3
 
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+dist/
+dist-ssr/
+*.local
+
+# Frontend build outputs
+frontend/dist/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
 # API Keys and Secrets (extra safety)
 *secret*
 *key*
@@ -82,6 +100,7 @@ service-account*.json
 # OS
 Thumbs.db
 desktop.ini
+.DS_Store
 
 # Temporary files
 *.tmp

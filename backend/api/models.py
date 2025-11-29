@@ -5,6 +5,8 @@ from typing import List, Optional
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     message: str
+    patient_id: Optional[str] = None
+    file_ids: Optional[List[str]] = []
 
 
 from pydantic import BaseModel
