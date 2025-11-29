@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { chatService } from '../services/api';
 
 export const useChat = (initialSessionId = null, patientContext = null) => {
@@ -10,6 +10,17 @@ export const useChat = (initialSessionId = null, patientContext = null) => {
   const [error, setError] = useState(null);
   const [agentTrace, setAgentTrace] = useState([]);
   const [needsHumanReview, setNeedsHumanReview] = useState(false);
+
+  // Keep local sessionId in sync when parent passes a specific session
+  useEffect(() => {
+    if (initialSessionId && initialSessionId !== sessionId) {
+      setSessionId(initialSessionId);
+      setMessages([]);
+      setAgentTrace([]);
+      setNeedsHumanReview(false);
+      setError(null);
+    }
+  }, [initialSessionId, sessionId]);
 
   const sendMessage = useCallback(async (text, metadata = {}) => {
     if (!text.trim() && !metadata.file_id) return;
@@ -43,6 +54,12 @@ export const useChat = (initialSessionId = null, patientContext = null) => {
         messagePayload.message,
         contextWithMetadata
       );
+
+      // Backend may return a canonical/DB session_id; adopt it so
+      // subsequent turns stay in the same conversation.
+      if (response.session_id && response.session_id !== sessionId) {
+        setSessionId(response.session_id);
+      }
 
       // Handle backend response format: response.messages is an array of strings
       const responseContent = response.messages && response.messages.length > 0
