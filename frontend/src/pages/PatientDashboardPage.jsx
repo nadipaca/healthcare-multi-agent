@@ -251,15 +251,34 @@ const PatientDashboardPage = () => {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       try {
-                        await fileService.uploadPrescription(file, null, 'Uploaded from dashboard');
+                        // First, attempt the upload itself
+                        await fileService.uploadPrescription(
+                          file,
+                          null,
+                          'Uploaded from dashboard'
+                        );
+                      } catch (err) {
+                        // Only treat a true upload failure as an error for the user
+                        const message =
+                          err?.response?.data?.detail ||
+                          err?.message ||
+                          'Failed to upload prescription';
+                        alert(message);
+                        e.target.value = '';
+                        return;
+                      }
+
+                      // Upload succeeded; try to refresh UI state separately
+                      try {
                         const [presRes, meRes] = await Promise.all([
                           fileService.getPrescriptionFiles(patientId),
                           patientService.getCurrentUser(),
                         ]);
                         setPrescriptionDocs(presRes.files || []);
                         setData(meRes.data);
-                      } catch (err) {
-                        alert('Failed to upload prescription');
+                      } catch (refreshErr) {
+                        // Log refresh errors but don't show a misleading upload failure
+                        console.error('Failed to refresh prescriptions after upload', refreshErr);
                       } finally {
                         e.target.value = '';
                       }

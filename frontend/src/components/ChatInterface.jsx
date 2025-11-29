@@ -6,6 +6,8 @@ import { fileService } from '../services/api';
 const ChatInterface = ({ selectedPatient, patientData, sessionId: externalSessionId,
   initialMessages = [], analyzeFileId
 }) => {
+  const effectivePatient =
+  (patientData && patientData.patient) || selectedPatient;
   const {
     sessionId: hookSessionId,
     messages,
@@ -16,7 +18,7 @@ const ChatInterface = ({ selectedPatient, patientData, sessionId: externalSessio
     sendMessage,
     newSession,
     setMessages,
-  } = useChat(externalSessionId, patientData || selectedPatient);
+  } = useChat(externalSessionId, effectivePatient);
 
   const sessionId = externalSessionId || hookSessionId;
 

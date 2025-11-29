@@ -457,10 +457,33 @@ async def upload_prescription(
         if not validation["valid"]:
             raise HTTPException(status_code=400, detail=validation["error"])
         
-        # Save file
+        # Save file locally
         file_info = await save_uploaded_file(file=file, patient_id=patient_id, category="prescriptions")
-        gcs_path = f"prescriptions/{patient_id}/{file_info['stored_name']}"
-        gcs_uri = upload_file_to_gcs(file_info["file_path"], gcs_path, content_type=file_info["file_type"])
+
+        # Run OCR so the assistant can read the prescription later
+        ocr_text = None
+        try:
+            ocr_text = extract_text_from_file(file_info["file_path"], file.content_type)
+        except Exception:
+            # If OCR fails, still keep the raw file
+            import traceback
+            traceback.print_exc()
+
+        # Try to upload to GCS, but don't fail the whole request if GCS isn't configured
+        gcs_uri = None
+        try:
+            gcs_path = f"prescriptions/{patient_id}/{file_info['stored_name']}"
+            gcs_uri = upload_file_to_gcs(
+                file_info["file_path"],
+                gcs_path,
+                content_type=file_info["file_type"],
+            )
+        except Exception:
+            # For local/dev environments without GCS, just log and continue
+            import traceback
+            traceback.print_exc()
+
+        # Store in dedicated prescription_files table (for dashboard)
         document = db_helper.save_prescription_file(
             patient_id=patient_id,
             rx_id=rx_id,
@@ -469,8 +492,24 @@ async def upload_prescription(
             file_type=file_info["file_type"],
             file_size=file_info["file_size"],
             notes=notes,
-            gcs_uri=gcs_uri
+            gcs_uri=gcs_uri,
         )
+
+        # Also store in medical_documents so chat can access it
+        try:
+            db_helper.save_prescription_document_file(
+                patient_id=patient_id,
+                file_name=file_info["file_name"],
+                file_path=file_info["file_path"],
+                file_type=file_info["file_type"],
+                file_size=file_info["file_size"],
+                notes=notes,
+                extracted_text=ocr_text or None,
+                gcs_uri=gcs_uri,
+            )
+        except Exception:
+            import traceback
+            traceback.print_exc()
         
         return FileUploadResponse(
             file_id=document["file_id"],
@@ -511,13 +550,19 @@ async def upload_lab_result(
         # Run OCR to extract text from the uploaded document
         ocr_text = extract_text_from_file(file_info["file_path"], file.content_type)
 
-        # Upload the file to GCS for durable storage
-        gcs_path = f"labs/{patient_id}/{file_info['stored_name']}"
-        gcs_uri = upload_file_to_gcs(
-            file_info["file_path"],
-            gcs_path,
-            content_type=file_info["file_type"]
-        )
+        # Upload the file to GCS for durable storage (best-effort in dev)
+        gcs_uri = None
+        try:
+            gcs_path = f"labs/{patient_id}/{file_info['stored_name']}"
+            gcs_uri = upload_file_to_gcs(
+                file_info["file_path"],
+                gcs_path,
+                content_type=file_info["file_type"],
+            )
+        except Exception:
+            # Log but don't fail upload if GCS isn't available
+            import traceback
+            traceback.print_exc()
         document = db_helper.save_lab_result_file(
             patient_id=patient_id,
             test_name=test_name,

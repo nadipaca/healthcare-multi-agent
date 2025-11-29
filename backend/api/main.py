@@ -32,6 +32,7 @@ from database import db_helper
 from api.testing_routes import router as testing_router
 from api.patient_routes import router as patient_router
 from api.chat_history_routes import router as chat_history_router
+from api.gcp_ocr import extract_text_from_file
 
 APP_NAME = "agents"
 USER_ID = "demo_user"
@@ -182,14 +183,125 @@ async def chat(request: Request, payload: ChatRequest):
 
     lab_context = ""
     if patient_id and any(kw in payload.message.lower() for kw in ["lab", "test result", "blood work"]):
-        structured_labs = db_helper.get_lab_results(patient_id)[:3]  # last 3
         lab_lines = []
+
+        # 1) Structured lab results from lab_results table
+        structured_labs = db_helper.get_lab_results(patient_id)[:3]  # last 3
         for lab in structured_labs:
             lab_lines.append(
                 f"{lab['test_date']}: {lab['test_name']} = {lab['result_value']} {lab['unit']} (ref: {lab['reference_range']})"
             )
+
+        # 2) Fallback to recent uploaded lab-result documents (if no structured labs)
+        if not lab_lines:
+            try:
+                recent_lab_docs = db_helper.get_patient_files(patient_id, "lab_result")[:2]
+                for doc in recent_lab_docs:
+                    extracted = doc.get("extracted_text") or ""
+                    if extracted:
+                        # Truncate to avoid overloading context
+                        snippet = extracted[:800]
+                        lab_lines.append(
+                            f"Lab document: {doc.get('file_name', 'unknown')}\n{snippet}"
+                        )
+            except Exception:
+                # If anything goes wrong fetching documents, just skip the fallback
+                pass
+
         if lab_lines:
             lab_context = "Recent lab results for this patient:\n" + "\n".join(lab_lines) + "\n\n"
+
+    # Add context from prescription documents when the user asks about medications
+    rx_context = ""
+    if patient_id and any(
+        kw in payload.message.lower()
+        for kw in ["prescription", "prescriptions", "medication", "medications", "meds", "drug", "drugs"]
+    ):
+        rx_lines: List[str] = []
+
+        # 1) Structured prescription records
+        try:
+            structured_rx = db_helper.get_patient_prescriptions(patient_id)[:5]
+            for rx in structured_rx:
+                med = rx.get("medication") or "Unknown medication"
+                dose = rx.get("dosage") or ""
+                instructions = rx.get("instructions") or ""
+                indication = rx.get("indication") or ""
+                last_filled = rx.get("last_filled") or "unknown date"
+                refills = rx.get("refills_remaining")
+                refills_str = f", refills remaining: {refills}" if refills is not None else ""
+
+                detail_parts = [p for p in [instructions, indication] if p]
+                details = " - ".join(detail_parts) if detail_parts else ""
+
+                line = f"{med} {dose}".strip()
+                if details:
+                    line += f": {details}"
+                line += f" (last filled {last_filled}{refills_str})"
+                rx_lines.append(line)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+        # 2) Recent uploaded prescription documents with OCR text (from medical_documents)
+        try:
+            recent_rx_docs = db_helper.get_patient_files(patient_id, "prescription")[:3]
+            for doc in recent_rx_docs:
+                extracted = doc.get("extracted_text") or ""
+                if extracted:
+                    snippet = extracted[:800]
+                    rx_lines.append(
+                        f"Prescription document: {doc.get('file_name', 'unknown')}\n{snippet}"
+                    )
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+        # 3) Backfill from prescription_files if older uploads were not mirrored into medical_documents
+        try:
+            if not rx_lines:
+                rx_files = db_helper.get_prescription_files(patient_id)[:3]
+                for pf in rx_files:
+                    snippet = ""
+                    try:
+                        snippet = extract_text_from_file(pf["file_path"], pf.get("file_type"))
+                    except Exception:
+                        import traceback
+                        traceback.print_exc()
+
+                    if snippet:
+                        text_snippet = snippet[:800]
+                        rx_lines.append(
+                            f"Prescription document: {pf.get('file_name', 'unknown')}\n{text_snippet}"
+                        )
+                        # Persist into medical_documents so future calls don't need to re-OCR
+                        try:
+                            db_helper.save_prescription_document_file(
+                                patient_id=patient_id,
+                                file_name=pf.get("file_name", ""),
+                                file_path=pf.get("file_path", ""),
+                                file_type=pf.get("file_type", ""),
+                                file_size=pf.get("file_size", 0),
+                                notes=pf.get("notes"),
+                                extracted_text=text_snippet,
+                                gcs_uri=pf.get("gcs_uri"),
+                            )
+                        except Exception:
+                            import traceback
+                            traceback.print_exc()
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+        if rx_lines:
+            rx_context = "Current prescription information for this patient:\n" + "\n".join(rx_lines) + "\n\n"
+        else:
+            # Explicitly tell the model that we checked and found no prescriptions,
+            # so it doesn't assume it lacks access.
+            rx_context = (
+                "Current prescription information for this patient:\n"
+                "- There are no active prescriptions on file in the system.\n\n"
+            )
 
 
     # existing ocr_context from medical_documents
@@ -200,7 +312,7 @@ async def chat(request: Request, payload: ChatRequest):
             if doc and doc.get("extracted_text"):
                 ocr_context += f"\n--- File: {doc.get('file_name')} ---\n{doc['extracted_text']}\n"
 
-    context = lab_context + ocr_context
+    context = lab_context + rx_context + ocr_context
     full_message = f"{context}User message: {payload.message}" if context else payload.message
 
     # ...use full_message in agent invocation...
